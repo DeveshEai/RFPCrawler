@@ -7,6 +7,7 @@ from src.sources.find_a_tender_adapter import FindATenderAdapter
 from src.sources.global_tech_tenders_adapter import GlobalTechTendersAdapter
 from src.sources.serpapi_google_adapter import SerpApiGoogleAdapter
 from src.sources.duckduckgo_free_adapter import DuckDuckGoFreeAdapter
+from src.sources.craxy_ai_adapter import CraxyAIAdapter
 from src.intelligence.stage1_filter import Stage1DeterministicFilter
 from src.intelligence.llm_reasoner import LLMOpportunityReasoner
 from src.services.email_service import EmailAlertService
@@ -34,7 +35,8 @@ class RFPIntelligencePipeline:
             FindATenderAdapter(),
             GlobalTechTendersAdapter(),
             SerpApiGoogleAdapter(),
-            DuckDuckGoFreeAdapter()
+            DuckDuckGoFreeAdapter(),
+            CraxyAIAdapter()
         ]
         self.stage1_filter = Stage1DeterministicFilter()
         self.reasoner = LLMOpportunityReasoner()

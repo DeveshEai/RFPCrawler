@@ -880,6 +880,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
                             <option value="global_sam_gov">SAM.gov (US)</option>
                             <option value="google_serpapi">Google SerpAPI</option>
                             <option value="duckduckgo_free">🦆 DuckDuckGo Free Search</option>
+                            <option value="craxy_ai">🔥 Craxy AI Free RFP Database</option>
                         </select>
                     </div>
                 </div>
