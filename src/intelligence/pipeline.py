@@ -43,12 +43,17 @@ class RFPIntelligencePipeline:
         self._ensure_portals_seeded()
         stats = {"scraped": 0, "stage1_passed": 0, "evaluated": 0, "pursued": 0, "emails_sent": 0}
 
+        # Retrieve enabled portal IDs from database
+        active_portal_ids = {
+            p.portal_id for p in self.db.query(ProcurementPortal).filter_by(is_active=True).all()
+        }
+
         active_adapters = self.adapters
         if target_portal_id:
             active_adapters = [a for a in self.adapters if a.portal_id == target_portal_id]
         else:
-            # Standard crawl runs official portals only, keeping Google SerpAPI optional via dedicated trigger
-            active_adapters = [a for a in self.adapters if a.portal_id != "google_serpapi"]
+            # Standard crawl runs enabled portals only
+            active_adapters = [a for a in self.adapters if a.portal_id in active_portal_ids and a.portal_id != "google_serpapi"]
 
         from datetime import datetime
         batch_id = f"batch_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"

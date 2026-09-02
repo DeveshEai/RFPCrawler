@@ -58,14 +58,20 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
     rfps = sorted(rfps, key=get_rfp_priority_key, reverse=True)
 
+    def render_status_badge(p):
+        if p.is_active:
+            return f'''<button onclick="togglePortal('{p.portal_id}')" style="background: #dcfce7; color: #15803d; border: 1px solid #86efac; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">🟢 ACTIVE (ON)</button>'''
+        else:
+            return f'''<button onclick="togglePortal('{p.portal_id}')" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">⚪ INACTIVE (OFF)</button>'''
+
     portal_rows = "".join(f"""
         <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 14px 16px; font-weight: 600; color: #1e293b;">{p.name}</td>
             <td style="padding: 14px 16px; color: #64748b;">{p.country}</td>
-            <td style="padding: 14px 16px;"><span style="background: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 9999px; font-weight: 600; font-size: 0.75rem;">ACTIVE</span></td>
+            <td style="padding: 14px 16px;">{render_status_badge(p)}</td>
             <td style="padding: 14px 16px;"><a href="{p.base_url}" target="_blank" style="color: #0284c7; text-decoration: none; font-weight: 500;">{p.base_url}</a></td>
             <td style="padding: 14px 16px;">
-                <button onclick="triggerLiveScan('{p.portal_id}')" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0284c7; padding: 6px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem;">
+                <button onclick="triggerLiveScan('{p.portal_id}')" style="background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem;">
                     ▶️ Run Adapter
                 </button>
             </td>
@@ -949,6 +955,16 @@ def admin_dashboard(db: Session = Depends(get_db)):
                     alert('Scan error: ' + e);
                 }}
             }}
+
+            async function togglePortal(portalId) {{
+                try {{
+                    const res = await fetch('/api/v1/portals/' + encodeURIComponent(portalId) + '/toggle', {{ method: 'POST' }});
+                    const data = await res.json();
+                    window.location.reload();
+                }} catch (e) {{
+                    alert('Failed to toggle portal: ' + e);
+                }}
+            }}
         </script>
     </body>
     </html>
@@ -990,3 +1006,12 @@ async def trigger_crawl(portal_id: str = None, db: Session = Depends(get_db)):
     pipeline = RFPIntelligencePipeline(db)
     stats = await pipeline.run_pipeline(target_portal_id=portal_id)
     return {"status": "success", "stats": stats}
+
+@app.post("/api/v1/portals/{portal_id}/toggle")
+def toggle_portal(portal_id: str, db: Session = Depends(get_db)):
+    portal = db.query(ProcurementPortal).filter_by(portal_id=portal_id).first()
+    if not portal:
+        raise HTTPException(status_code=404, detail="Portal not found")
+    portal.is_active = not portal.is_active
+    db.commit()
+    return {"status": "success", "portal_id": portal.portal_id, "is_active": portal.is_active}
