@@ -708,6 +708,9 @@ def admin_dashboard(db: Session = Depends(get_db)):
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                             Trigger Live Procurement Crawl
                         </button>
+                        <button class="btn-trigger" style="background: #0284c7;" onclick="triggerLiveScan('duckduckgo_free')">
+                            🦆 Trigger DuckDuckGo Free Crawl
+                        </button>
                         <button class="btn-trigger" style="background: #ef4444;" onclick="cancelActiveCrawl()">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
                             Stop / Cancel Crawl
@@ -871,6 +874,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
                             <option value="find_a_tender">Find a Tender (UK)</option>
                             <option value="global_sam_gov">SAM.gov (US)</option>
                             <option value="google_serpapi">Google SerpAPI</option>
+                            <option value="duckduckgo_free">🦆 DuckDuckGo Free Search</option>
                         </select>
                     </div>
                 </div>
