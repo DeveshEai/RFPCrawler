@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./rfp_intelligence.db"
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "qwen/qwen3.8-27b"
+    SERPAPI_KEY: str = ""
     LLM_PROVIDER: str = "groq"
     GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""

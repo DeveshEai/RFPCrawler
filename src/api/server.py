@@ -64,6 +64,11 @@ def admin_dashboard(db: Session = Depends(get_db)):
             <td style="padding: 14px 16px; color: #64748b;">{p.country}</td>
             <td style="padding: 14px 16px;"><span style="background: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 9999px; font-weight: 600; font-size: 0.75rem;">ACTIVE</span></td>
             <td style="padding: 14px 16px;"><a href="{p.base_url}" target="_blank" style="color: #0284c7; text-decoration: none; font-weight: 500;">{p.base_url}</a></td>
+            <td style="padding: 14px 16px;">
+                <button onclick="triggerLiveScan('{p.portal_id}')" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0284c7; padding: 6px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem;">
+                    ▶️ Run Adapter
+                </button>
+            </td>
         </tr>
     """ for p in portals)
 
@@ -635,10 +640,16 @@ def admin_dashboard(db: Session = Depends(get_db)):
             <div id="tab-feed" class="tab-view active">
                 <div class="top-bar">
                     <h1 class="page-title">Opportunity Feed</h1>
-                    <button class="btn-trigger" onclick="triggerLiveScan()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                        Trigger Live Crawl
-                    </button>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-trigger" onclick="triggerLiveScan(null)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                            Trigger Standard Portals Crawl
+                        </button>
+                        <button class="btn-trigger" style="background: #0284c7;" onclick="triggerLiveScan('google_serpapi')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            Trigger Google SerpAPI Crawl
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Top Side Live Log Stream Ticker -->
@@ -744,6 +755,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
                                 <th style="padding: 14px 16px;">COUNTRY</th>
                                 <th style="padding: 14px 16px;">STATUS</th>
                                 <th style="padding: 14px 16px;">URL</th>
+                                <th style="padding: 14px 16px;">ACTION</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -926,20 +938,15 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 }}
             }}
 
-            async function triggerLiveScan() {{
-                const btn = document.querySelector('.btn-trigger');
-                btn.innerHTML = '⏳ Crawling & Evaluating...';
-                btn.disabled = true;
+            async function triggerLiveScan(portalId) {{
+                const targetUrl = portalId ? '/api/v1/crawl/trigger?portal_id=' + encodeURIComponent(portalId) : '/api/v1/crawl/trigger';
                 try {{
-                    const res = await fetch('/api/v1/crawl/trigger', {{ method: 'POST' }});
+                    const res = await fetch(targetUrl, {{ method: 'POST' }});
                     const data = await res.json();
                     await fetchLiveLogs();
                     setTimeout(() => {{ window.location.reload(); }}, 1200);
                 }} catch (e) {{
                     alert('Scan error: ' + e);
-                }} finally {{
-                    btn.innerHTML = '⚡ Trigger Live Crawl';
-                    btn.disabled = false;
                 }}
             }}
         </script>

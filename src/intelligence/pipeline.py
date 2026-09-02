@@ -5,6 +5,7 @@ from src.db.models import ProcurementPortal, RFPOpportunity, RFPExecutionEvaluat
 from src.sources.contracts_finder_adapter import ContractsFinderAdapter
 from src.sources.find_a_tender_adapter import FindATenderAdapter
 from src.sources.global_tech_tenders_adapter import GlobalTechTendersAdapter
+from src.sources.serpapi_google_adapter import SerpApiGoogleAdapter
 from src.intelligence.stage1_filter import Stage1DeterministicFilter
 from src.intelligence.llm_reasoner import LLMOpportunityReasoner
 from src.services.email_service import EmailAlertService
@@ -16,7 +17,8 @@ class RFPIntelligencePipeline:
         self.adapters = [
             ContractsFinderAdapter(),
             FindATenderAdapter(),
-            GlobalTechTendersAdapter()
+            GlobalTechTendersAdapter(),
+            SerpApiGoogleAdapter()
         ]
         self.stage1_filter = Stage1DeterministicFilter()
         self.reasoner = LLMOpportunityReasoner()
@@ -44,6 +46,9 @@ class RFPIntelligencePipeline:
         active_adapters = self.adapters
         if target_portal_id:
             active_adapters = [a for a in self.adapters if a.portal_id == target_portal_id]
+        else:
+            # Standard crawl runs official portals only, keeping Google SerpAPI optional via dedicated trigger
+            active_adapters = [a for a in self.adapters if a.portal_id != "google_serpapi"]
 
         from datetime import datetime
         batch_id = f"batch_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
