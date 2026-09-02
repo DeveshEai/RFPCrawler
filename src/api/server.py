@@ -103,8 +103,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
         b_id = getattr(r, 'batch_id', None)
         is_latest = (
             (latest_batch_id and b_id == latest_batch_id) or
-            (cutoff_time and r.created_at and r.created_at >= cutoff_time) or
-            (not latest_batch_id and (count_latest < 5 or len(rfps) <= 5))
+            (not latest_batch_id and (count_latest < 8 or len(rfps) <= 8))
         )
         if is_latest:
             count_latest += 1
