@@ -146,7 +146,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
         </div>
         """
 
-    rfp_json_str = json.dumps(rfp_map_dict)
+    rfp_json_str = json.dumps(rfp_map_dict, ensure_ascii=False)
 
     html = f"""
     <!DOCTYPE html>
@@ -756,9 +756,8 @@ def admin_dashboard(db: Session = Depends(get_db)):
             </div>
         </div>
 
+        <script id="rfp-data" type="application/json">{rfp_json_str}</script>
         <script>
-            const RFP_DATA = {rfp_json_str};
-
             function switchTab(tabId, el) {{
                 document.querySelectorAll('.tab-view').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -767,23 +766,37 @@ def admin_dashboard(db: Session = Depends(get_db)):
             }}
 
             function openBriefModal(rfpId) {{
-                const item = RFP_DATA[rfpId];
-                if (!item) return;
-                document.getElementById('mTitle').innerText = item.title;
-                document.getElementById('mBadge').innerText = item.badge_text;
-                document.getElementById('mBadge').style.backgroundColor = item.badge_bg;
-                
-                document.getElementById('mOrgRegion').innerText = item.org + ' (' + item.country + ')';
-                document.getElementById('mValDead').innerText = 'Contract Value: ' + item.val + ' | Submission Deadline: ' + item.deadline;
-                document.getElementById('mSummary').innerText = item.summary;
-                document.getElementById('mWhy').innerText = item.why;
-                document.getElementById('mDeliv').innerText = Array.isArray(item.deliverables) ? item.deliverables.join(' • ') : item.deliverables;
-                document.getElementById('mGaps').innerText = Array.isArray(item.gaps) ? item.gaps.join(' • ') : item.gaps;
-                document.getElementById('mPortalSource').innerText = item.portal + ' (' + item.url + ')';
-                document.getElementById('mRecTier').innerText = item.rec + ' (' + item.score + '% Match Score)';
-                document.getElementById('mLink').href = item.url;
-                
-                document.getElementById('briefModal').classList.add('active');
+                try {{
+                    const dataTag = document.getElementById('rfp-data');
+                    if (!dataTag) {{
+                        console.error('rfp-data tag not found');
+                        return;
+                    }}
+                    const rfpMap = JSON.parse(dataTag.textContent);
+                    const item = rfpMap[rfpId];
+                    if (!item) {{
+                        console.error('RFP item not found for id:', rfpId);
+                        return;
+                    }}
+
+                    document.getElementById('mTitle').innerText = item.title;
+                    document.getElementById('mBadge').innerText = item.badge_text;
+                    document.getElementById('mBadge').style.backgroundColor = item.badge_bg;
+                    
+                    document.getElementById('mOrgRegion').innerText = item.org + ' (' + item.country + ')';
+                    document.getElementById('mValDead').innerText = 'Contract Value: ' + item.val + ' | Submission Deadline: ' + item.deadline;
+                    document.getElementById('mSummary').innerText = item.summary;
+                    document.getElementById('mWhy').innerText = item.why;
+                    document.getElementById('mDeliv').innerText = Array.isArray(item.deliverables) ? item.deliverables.join(' • ') : item.deliverables;
+                    document.getElementById('mGaps').innerText = Array.isArray(item.gaps) ? item.gaps.join(' • ') : item.gaps;
+                    document.getElementById('mPortalSource').innerText = item.portal + ' (' + item.url + ')';
+                    document.getElementById('mRecTier').innerText = item.rec + ' (' + item.score + '% Match Score)';
+                    document.getElementById('mLink').href = item.url;
+                    
+                    document.getElementById('briefModal').classList.add('active');
+                }} catch (err) {{
+                    console.error("AI Brief modal error:", err);
+                }}
             }}
 
             function closeBriefModal() {{
