@@ -42,7 +42,14 @@ def admin_dashboard(db: Session = Depends(get_db)):
     pipeline = RFPIntelligencePipeline(db)
     pipeline._ensure_portals_seeded()
     portals = db.query(ProcurementPortal).all()
-    rfps = db.query(RFPOpportunity).order_by(RFPOpportunity.created_at.desc()).all()
+    rfps_chronological = db.query(RFPOpportunity).order_by(RFPOpportunity.created_at.desc()).all()
+
+    # Identify latest batch from true chronological order (most recent crawl run)
+    latest_batch_id = None
+    for r in rfps_chronological:
+        if getattr(r, 'batch_id', None):
+            latest_batch_id = r.batch_id
+            break
 
     # Sort RFPs so PURSUE / high match score tags come 1st, REVIEW tags come later
     def get_rfp_priority_key(r):
@@ -57,7 +64,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
             tier = 1
         return (tier, score)
 
-    rfps = sorted(rfps, key=get_rfp_priority_key, reverse=True)
+    rfps = sorted(rfps_chronological, key=get_rfp_priority_key, reverse=True)
 
     def render_status_badge(p):
         if p.is_active:
@@ -81,13 +88,6 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
     import json
     rfp_map_dict = {}
-
-    # Identify latest batch
-    latest_batch_id = None
-    for r in rfps:
-        if getattr(r, 'batch_id', None):
-            latest_batch_id = r.batch_id
-            break
 
     count_latest = 0
     count_archive = 0
