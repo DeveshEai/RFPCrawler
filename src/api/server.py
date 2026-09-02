@@ -10,8 +10,15 @@ from src.intelligence.pipeline import RFPIntelligencePipeline
 from src.services.logger_service import system_logger
 from config import settings
 
-# Create DB tables
+# Create DB tables & auto-migrate columns
 Base.metadata.create_all(bind=engine)
+with engine.connect() as conn:
+    try:
+        from sqlalchemy import text
+        conn.execute(text("ALTER TABLE rfp_opportunities ADD COLUMN batch_id VARCHAR(50);"))
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
 
 app = FastAPI(
     title=settings.APP_NAME,
