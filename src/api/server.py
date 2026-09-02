@@ -42,14 +42,19 @@ def admin_dashboard(db: Session = Depends(get_db)):
     pipeline = RFPIntelligencePipeline(db)
     pipeline._ensure_portals_seeded()
     portals = db.query(ProcurementPortal).all()
+    from datetime import datetime, timedelta
     rfps_chronological = db.query(RFPOpportunity).order_by(RFPOpportunity.created_at.desc()).all()
 
-    # Identify latest batch from true chronological order (most recent crawl run)
+    # Identify latest batch and recent crawl window (most recent crawl run session within 30 mins)
+    latest_item = rfps_chronological[0] if rfps_chronological else None
+    latest_time = latest_item.created_at if latest_item else None
     latest_batch_id = None
     for r in rfps_chronological:
         if getattr(r, 'batch_id', None):
             latest_batch_id = r.batch_id
             break
+
+    cutoff_time = (latest_time - timedelta(minutes=30)) if latest_time else None
 
     # Sort RFPs so PURSUE / high match score tags come 1st, REVIEW tags come later
     def get_rfp_priority_key(r):
@@ -96,7 +101,11 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
     for r in rfps:
         b_id = getattr(r, 'batch_id', None)
-        is_latest = (latest_batch_id and b_id == latest_batch_id) or (not latest_batch_id and (count_latest < 3 or len(rfps) <= 3))
+        is_latest = (
+            (latest_batch_id and b_id == latest_batch_id) or
+            (cutoff_time and r.created_at and r.created_at >= cutoff_time) or
+            (not latest_batch_id and (count_latest < 5 or len(rfps) <= 5))
+        )
         if is_latest:
             count_latest += 1
             card_class = "rfp-card-latest"
