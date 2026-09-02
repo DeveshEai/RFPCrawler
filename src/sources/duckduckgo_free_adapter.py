@@ -79,13 +79,14 @@ class DuckDuckGoFreeAdapter(BasePortalAdapter):
                 clean_title = re.sub(r'<[^>]+>', '', title)
 
                 results.append({
+                    "portal_id": self.portal_id,
                     "external_rfp_id": f"duckduckgo_free_{link_hash}",
                     "title": clean_title[:180],
                     "issuing_org": "DuckDuckGo Free Web Search",
                     "country": "Global",
                     "source_url": href,
                     "submission_deadline": "Check Notice Details",
-                    "estimated_value_usd": "Undisclosed",
+                    "estimated_value_usd": 0.0,
                     "raw_content": f"{clean_title}. {snippet}"
                 })
 

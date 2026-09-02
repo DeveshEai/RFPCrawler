@@ -122,7 +122,7 @@ class RFPIntelligencePipeline:
 
                 # Save RFP opportunity record with batch_id
                 rfp_obj = RFPOpportunity(
-                    portal_id=rfp_data["portal_id"],
+                    portal_id=rfp_data.get("portal_id", adapter.portal_id),
                     external_rfp_id=ext_id,
                     title=rfp_data["title"],
                     issuing_org=rfp_data.get("issuing_org"),
