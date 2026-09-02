@@ -1,0 +1,137 @@
+import json
+import re
+import httpx
+from typing import Dict, Any
+from config import settings
+from src.services.logger_service import system_logger
+
+EAI_KNOWLEDGE_CONTEXT = """
+Verified Corporate Knowledge Bases:
+
+1. EAI Systems (https://eaisystems.com) - Enterprise Transformation & Low-Code Integration:
+   - Certified Pega BPM & DPA Implementation: Enterprise Case Management, Pega Infinity, Decisioning, Customer Service, Low-Code Governance.
+   - Enterprise Application Integration (EAI): Microservices architecture, OpenAPI/REST integrations, ESB, Cloud Migration (AWS, Azure, GCP), ERP & CRM orchestration.
+   - Core Banking & Insurance Digital Transformation: Claims automation, onboarding workflows, policy administration modernizations.
+
+2. PhantomOps (https://phantomops.ae) - Sovereign Agentic AI Workforce Platform:
+   - Sovereign Arabic-Native Agentic AI Workforce: Multi-agent orchestration, LLM reasoning, autonomous enterprise tasks.
+   - BFSI & Government Specialized AI Agents: KYC automation, regulatory compliance (CBUAE), fraud detection, claims decisioning, localized NLP.
+   - Sovereign Deployment Models: On-premises, private cloud, air-gapped sovereign AI execution for government and banking security.
+
+Operating Regions: GCC (UAE, KSA, Oman, Qatar), UK, US, EU, APAC.
+Target Verticals: BFSI (Banking, Financial Services, Insurance), Public Sector, Telecom, Healthcare, Retail.
+"""
+
+SYSTEM_PROMPT = f"""
+You are the Chief Enterprise Architect for EAI Systems (https://eaisystems.com) and PhantomOps (https://phantomops.ae).
+Your task is to analyze procurement RFP notices and evaluate alignment against our verified capabilities.
+
+{EAI_KNOWLEDGE_CONTEXT}
+
+STRICT RULE: Only ground your evaluation on verified EAI/PhantomOps capabilities from eaisystems.com and phantomops.ae. Never hallucinate capabilities. If an RFP requires something EAI lacks (e.g. physical hardware, civil engineering, janitorial, lab equipment), explicitly tag it under missing_requirements.
+
+You MUST respond strictly in valid JSON with this exact structure:
+{{
+  "relevance_score": <int 0-100>,
+  "is_relevant": <bool>,
+  "why_relevant": "<explanation>",
+  "eai_deliverables": ["<list of specific EAI/PhantomOps offerings matching this RFP>"],
+  "missing_requirements": ["<list of requirements EAI lacks or requires partners for>"],
+  "ai_summary": "<concise 2-sentence executive summary>",
+  "recommendation": "<PURSUE | PASS | PARTNER>"
+}}
+"""
+
+class LLMOpportunityReasoner:
+    def __init__(self):
+        self.api_key = settings.GROQ_API_KEY
+        self.model = settings.GROQ_MODEL
+
+    async def evaluate_rfp(self, rfp_data: Dict[str, Any]) -> Dict[str, Any]:
+        title = rfp_data.get("title", "")
+        raw_content = rfp_data.get("raw_content", "")
+        combined_text = f"{title} {raw_content}".lower()
+
+        # 0. Hardware / Non-IT Rejection Check
+        hardware_terms = ["air conditioner", "air conditioners", "hvac", "laboratory equipment", "lab equipment", "furniture", "tires", "car rental", "vehicle", "cleaning", "plumbing", "roofing", "vending", "gritting", "boiler", "painting", "construction"]
+        if any(term in combined_text for term in hardware_terms):
+            system_logger.add_log("WARN", f"[LLMReasoner] Direct Hardware Rejection for '{title[:40]}'")
+            return {
+                "relevance_score": 10,
+                "is_relevant": False,
+                "why_relevant": "Non-IT physical hardware or facilities requirement outside EAI Systems / PhantomOps core software domain.",
+                "eai_deliverables": [],
+                "missing_requirements": ["Requires physical hardware/facilities servicing"],
+                "ai_summary": "Tender is for physical equipment/facilities services, not enterprise software or AI integration.",
+                "recommendation": "PASS"
+            }
+
+        # Try Groq API if key is set
+        if self.api_key:
+            try:
+                system_logger.add_log("INFO", f"[LLMReasoner] Querying Groq API model ({self.model}) with eaisystems.com & phantomops.ae grounding context...")
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": self.model,
+                            "messages": [
+                                {"role": "system", "content": SYSTEM_PROMPT},
+                                {"role": "user", "content": f"Evaluate this procurement notice:\nTitle: {title}\nDetails: {raw_content}"}
+                            ],
+                            "temperature": 0.2,
+                            "max_tokens": 600,
+                            "response_format": {"type": "json_object"}
+                        }
+                    )
+
+                    if resp.status_code == 200:
+                        content = resp.json()["choices"][0]["message"]["content"]
+                        parsed = json.loads(content)
+                        return parsed
+                    else:
+                        system_logger.add_log("WARN", f"[LLMReasoner] Groq API HTTP {resp.status_code}, falling back to deterministic heuristic evaluation.")
+            except Exception as e:
+                system_logger.add_log("ERROR", f"[LLMReasoner] Groq API error: {e}")
+
+        # Deterministic Heuristic Fallback
+        system_logger.add_log("INFO", f"[LLMReasoner] Applying eaisystems.com & phantomops.ae heuristic matcher...")
+        score = 50
+        recommendation = "REVIEW"
+        why = "Opportunity matches digital transformation and software integration scope."
+        deliverables = ["Digital Process Automation", "API Integration Services"]
+        missing = ["Detailed technical specification review required"]
+
+        if any(k in combined_text for k in ["pega", "bpm", "case management", "dpa"]):
+            score = 88
+            recommendation = "PURSUE"
+            why = "Strong alignment with EAI Systems' Certified Pega BPM/DPA implementation practice (eaisystems.com)."
+            deliverables = ["Pega Low-Code DPA Implementation", "Case Management Architecture", "Decisioning & Workflow Automation"]
+            missing = ["Local UK onshore resource allocation confirmation"]
+
+        elif any(k in combined_text for k in ["ai ", "artificial intelligence", "automation", "agent", "robot", "rpa"]):
+            score = 85
+            recommendation = "PURSUE"
+            why = "Direct alignment with PhantomOps Sovereign Agentic AI Workforce platform (phantomops.ae)."
+            deliverables = ["PhantomOps Sovereign AI Agents", "Automated Workflow Bots", "NLP & Intelligent Document Processing"]
+            missing = ["Private cloud air-gapped hosting requirements check"]
+
+        elif any(k in combined_text for k in ["software", "cyber", "security", "cloud", "data"]):
+            score = 75
+            recommendation = "PURSUE"
+            why = "Matches EAI Systems' core Enterprise Application Integration & Cloud Infrastructure domain (eaisystems.com)."
+            deliverables = ["Enterprise Integration Services", "Microservices & Cloud API Architecture", "Cybersecurity Governance"]
+
+        return {
+            "relevance_score": score,
+            "is_relevant": score >= settings.MATCH_SCORE_THRESHOLD,
+            "why_relevant": why,
+            "eai_deliverables": deliverables,
+            "missing_requirements": missing,
+            "ai_summary": f"Procurement opportunity '{title[:80]}' evaluated against eaisystems.com and phantomops.ae capability matrix. Score: {score}%.",
+            "recommendation": recommendation
+        }
