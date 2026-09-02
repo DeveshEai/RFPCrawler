@@ -655,6 +655,10 @@ def admin_dashboard(db: Session = Depends(get_db)):
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             Trigger Google SerpAPI Crawl
                         </button>
+                        <button class="btn-trigger" style="background: #ef4444;" onclick="cancelActiveCrawl()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                            Stop / Cancel Crawl
+                        </button>
                     </div>
                 </div>
 
@@ -944,19 +948,44 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 }}
             }}
 
+            function appendConsoleLog(level, message) {{
+                const container = document.getElementById('logConsole');
+                if (container) {{
+                    const time = new Date().toLocaleTimeString('en-US', {{ hour12: false }});
+                    const div = document.createElement('div');
+                    div.className = 'log-entry';
+                    div.innerHTML = `<span class="log-time">[${{time}}]</span> <span class="log-level-${{level}}">${{message}}</span>`;
+                    container.appendChild(div);
+                    container.scrollTop = container.scrollHeight;
+                }}
+            }}
+
             async function triggerLiveScan(portalId) {{
+                appendConsoleLog('INFO', '⚡ Initiating live crawl request' + (portalId ? ' for portal target [' + portalId + ']' : '') + '...');
                 const targetUrl = portalId ? '/api/v1/crawl/trigger?portal_id=' + encodeURIComponent(portalId) : '/api/v1/crawl/trigger';
                 try {{
                     const res = await fetch(targetUrl, {{ method: 'POST' }});
                     const data = await res.json();
                     await fetchLiveLogs();
-                    setTimeout(() => {{ window.location.reload(); }}, 1200);
+                    setTimeout(() => {{ window.location.reload(); }}, 1500);
                 }} catch (e) {{
-                    alert('Scan error: ' + e);
+                    appendConsoleLog('ERROR', 'Scan execution error: ' + e);
+                }}
+            }}
+
+            async function cancelActiveCrawl() {{
+                appendConsoleLog('WARN', '🛑 User clicked Stop/Cancel. Terminating active crawl tasks...');
+                try {{
+                    const res = await fetch('/api/v1/crawl/cancel', {{ method: 'POST' }});
+                    const data = await res.json();
+                    await fetchLiveLogs();
+                }} catch (e) {{
+                    appendConsoleLog('ERROR', 'Cancel error: ' + e);
                 }}
             }}
 
             async function togglePortal(portalId) {{
+                appendConsoleLog('INFO', '🔄 Toggling portal active state for ' + portalId + '...');
                 try {{
                     const res = await fetch('/api/v1/portals/' + encodeURIComponent(portalId) + '/toggle', {{ method: 'POST' }});
                     const data = await res.json();
@@ -1003,9 +1032,18 @@ def get_opportunities(db: Session = Depends(get_db)):
 
 @app.post("/api/v1/crawl/trigger")
 async def trigger_crawl(portal_id: str = None, db: Session = Depends(get_db)):
+    target_desc = f"portal target '{portal_id}'" if portal_id else "active standard portals"
+    system_logger.add_log("INFO", f"⚡ Live crawl initiated for {target_desc}...")
     pipeline = RFPIntelligencePipeline(db)
     stats = await pipeline.run_pipeline(target_portal_id=portal_id)
     return {"status": "success", "stats": stats}
+
+@app.post("/api/v1/crawl/cancel")
+def cancel_crawl():
+    from src.intelligence.pipeline import request_crawl_cancel
+    request_crawl_cancel()
+    system_logger.add_log("WARN", "🛑 Crawl termination requested by user.")
+    return {"status": "success", "message": "Cancellation requested"}
 
 @app.post("/api/v1/portals/{portal_id}/toggle")
 def toggle_portal(portal_id: str, db: Session = Depends(get_db)):
@@ -1014,4 +1052,6 @@ def toggle_portal(portal_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Portal not found")
     portal.is_active = not portal.is_active
     db.commit()
+    status_str = "ACTIVE (ON)" if portal.is_active else "INACTIVE (OFF)"
+    system_logger.add_log("INFO", f"🔄 Portal '{portal.name}' toggled to {status_str}.")
     return {"status": "success", "portal_id": portal.portal_id, "is_active": portal.is_active}

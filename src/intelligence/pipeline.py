@@ -11,6 +11,20 @@ from src.intelligence.llm_reasoner import LLMOpportunityReasoner
 from src.services.email_service import EmailAlertService
 from src.services.logger_service import system_logger
 
+_cancellation_requested = False
+
+def request_crawl_cancel():
+    global _cancellation_requested
+    _cancellation_requested = True
+
+def is_cancel_requested() -> bool:
+    global _cancellation_requested
+    return _cancellation_requested
+
+def reset_crawl_cancel():
+    global _cancellation_requested
+    _cancellation_requested = False
+
 class RFPIntelligencePipeline:
     def __init__(self, db: Session):
         self.db = db
@@ -40,6 +54,7 @@ class RFPIntelligencePipeline:
         self.db.commit()
 
     async def run_pipeline(self, target_portal_id: str = None) -> Dict[str, Any]:
+        reset_crawl_cancel()
         self._ensure_portals_seeded()
         stats = {"scraped": 0, "stage1_passed": 0, "evaluated": 0, "pursued": 0, "emails_sent": 0}
 
@@ -59,11 +74,20 @@ class RFPIntelligencePipeline:
         batch_id = f"batch_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
 
         for adapter in active_adapters:
+            if is_cancel_requested():
+                system_logger.add_log("WARN", "🛑 Crawl run terminated by user request.")
+                reset_crawl_cancel()
+                return stats
+
             system_logger.add_log("INFO", f"[Pipeline] Starting execution of adapter: {adapter.portal_name} (Batch: {batch_id})")
             rfps = await adapter.fetch_latest_rfps(max_items=30)
             stats["scraped"] += len(rfps)
 
             for rfp_data in rfps:
+                if is_cancel_requested():
+                    system_logger.add_log("WARN", "🛑 Crawl run terminated by user request.")
+                    reset_crawl_cancel()
+                    return stats
                 ext_id = rfp_data.get("external_rfp_id")
                 source_url = rfp_data.get("source_url")
                 title = rfp_data.get("title")
