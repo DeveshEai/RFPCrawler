@@ -57,13 +57,13 @@ class RFPIntelligencePipeline:
                 self.db.add(portal)
         self.db.commit()
 
-    async def run_pipeline(self, target_portal_id: str = None) -> Dict[str, Any]:
+    async def run_pipeline(self, target_portal_id: str = None, auto_evaluate: bool = False) -> Dict[str, Any]:
         reset_crawl_cancel()
         self._ensure_portals_seeded()
         stats = {"scraped": 0, "stage1_passed": 0, "evaluated": 0, "pursued": 0, "emails_sent": 0}
 
         target_name = target_portal_id if target_portal_id else "Standard Enabled Portals"
-        system_logger.add_log("INFO", f"=== 🚀 Starting Pipeline Crawl Run (Target: {target_name}) ===")
+        system_logger.add_log("INFO", f"=== 🚀 Starting Pipeline Fast Crawl Run (Target: {target_name}) ===")
 
         # Retrieve enabled portal IDs from database
         active_portal_ids = {
@@ -120,7 +120,6 @@ class RFPIntelligencePipeline:
                     continue
 
                 stats["stage1_passed"] += 1
-                system_logger.add_log("SUCCESS", f"[Stage1Filter] Passed: '{rfp_data['title'][:50]}'")
 
                 # Save RFP opportunity record with batch_id
                 rfp_obj = RFPOpportunity(
@@ -138,40 +137,105 @@ class RFPIntelligencePipeline:
                     batch_id=batch_id
                 )
                 self.db.add(rfp_obj)
-                self.db.flush()
-
-                # Stage 2: Semantic / LLM reasoning
-                system_logger.add_log("INFO", f"[LLMReasoner] Evaluating alignment against EAI/PhantomOps KB for RFP: '{rfp_data['title'][:40]}'")
-                eval_res = await self.reasoner.evaluate_rfp(rfp_data)
-                stats["evaluated"] += 1
-
-                score = eval_res.get("relevance_score", 0)
-                rec = eval_res.get("recommendation", "PASS")
-                system_logger.add_log("SUCCESS", f"[LLMReasoner] Score: {score}% ({rec}) for '{rfp_data['title'][:40]}'")
-
-                eval_obj = RFPExecutionEvaluation(
-                    rfp_id=rfp_obj.id,
-                    relevance_score=score,
-                    is_relevant=eval_res.get("is_relevant", False),
-                    why_relevant=eval_res.get("why_relevant", ""),
-                    eai_deliverables=eval_res.get("eai_deliverables", []),
-                    missing_requirements=eval_res.get("missing_requirements", []),
-                    ai_summary=eval_res.get("ai_summary", ""),
-                    recommendation=rec
-                )
-                self.db.add(eval_obj)
                 self.db.commit()
+                system_logger.add_log("SUCCESS", f"[Stage1Filter] Saved opportunity: '{rfp_data['title'][:45]}' (Ready for AI Evaluation)")
 
-                if rec == "PURSUE":
-                    stats["pursued"] += 1
+                if auto_evaluate:
+                    system_logger.add_log("INFO", f"[LLMReasoner] Evaluating alignment for RFP: '{rfp_data['title'][:40]}'")
+                    eval_res = await self.reasoner.evaluate_rfp(rfp_data)
+                    stats["evaluated"] += 1
 
-                # Dispatch email alert if score >= threshold
-                if eval_res.get("is_relevant"):
-                    system_logger.add_log("INFO", f"[EmailService] Dispatching alert email to rfp-alerts@eaisystems.com...")
-                    sent = self.email_service.send_opportunity_alert(rfp_data, eval_res)
-                    if sent:
-                        stats["emails_sent"] += 1
+                    score = eval_res.get("relevance_score", 0)
+                    rec = eval_res.get("recommendation", "PASS")
+                    system_logger.add_log("SUCCESS", f"[LLMReasoner] Score: {score}% ({rec}) for '{rfp_data['title'][:40]}'")
 
-        new_count = stats["scraped"] - stats.get("duplicates", 0)
-        system_logger.add_log("SUCCESS", f"🏁 Pipeline run completed. Scraped: {stats['scraped']} | New: {new_count} | Duplicates: {stats.get('duplicates', 0)} | Evaluated: {stats['evaluated']} | Pursued: {stats['pursued']}")
+                    eval_obj = RFPExecutionEvaluation(
+                        rfp_id=rfp_obj.id,
+                        relevance_score=score,
+                        is_relevant=eval_res.get("is_relevant", False),
+                        why_relevant=eval_res.get("why_relevant", ""),
+                        eai_deliverables=eval_res.get("eai_deliverables", []),
+                        missing_requirements=eval_res.get("missing_requirements", []),
+                        ai_summary=eval_res.get("ai_summary", ""),
+                        recommendation=rec
+                    )
+                    self.db.add(eval_obj)
+                    self.db.commit()
+
+                    if rec == "PURSUE":
+                        stats["pursued"] += 1
+
+                    if eval_res.get("is_relevant"):
+                        sent = self.email_service.send_opportunity_alert(rfp_data, eval_res)
+                        if sent:
+                            stats["emails_sent"] += 1
+
+        system_logger.add_log("SUCCESS", f"🏁 Fast Crawl completed! Scraped: {stats['scraped']} | Saved to DB: {stats['stage1_passed']} (Click '🧠 Evaluate' to analyze with AI)")
+        return stats
+
+    async def evaluate_pending_rfps(self, limit: int = 50) -> Dict[str, Any]:
+        reset_crawl_cancel()
+        system_logger.add_log("INFO", "=== 🧠 Starting Batch AI Evaluation for Pending RFPs ===")
+
+        unevaluated_rfps = (
+            self.db.query(RFPOpportunity)
+            .outerjoin(RFPExecutionEvaluation, RFPOpportunity.id == RFPExecutionEvaluation.rfp_id)
+            .filter(RFPExecutionEvaluation.id == None)
+            .order_by(RFPOpportunity.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        if not unevaluated_rfps:
+            system_logger.add_log("INFO", "✅ No pending unassessed RFPs found in database.")
+            return {"evaluated": 0, "pursued": 0}
+
+        stats = {"evaluated": 0, "pursued": 0, "emails_sent": 0}
+        system_logger.add_log("INFO", f"[BatchEval] Found {len(unevaluated_rfps)} pending RFPs. Evaluating with Groq LLM...")
+
+        for rfp in unevaluated_rfps:
+            if is_cancel_requested():
+                system_logger.add_log("WARN", "🛑 Evaluation run terminated by user request.")
+                reset_crawl_cancel()
+                return stats
+
+            rfp_data = {
+                "title": rfp.title,
+                "issuing_org": rfp.issuing_org,
+                "country": rfp.country,
+                "source_url": rfp.source_url,
+                "submission_deadline": rfp.submission_deadline,
+                "estimated_value_usd": rfp.estimated_value_usd,
+                "raw_content": rfp.raw_content or rfp.title
+            }
+
+            system_logger.add_log("INFO", f"[LLMReasoner] Evaluating: '{rfp.title[:40]}'")
+            eval_res = await self.reasoner.evaluate_rfp(rfp_data)
+            stats["evaluated"] += 1
+
+            score = eval_res.get("relevance_score", 0)
+            rec = eval_res.get("recommendation", "PASS")
+            system_logger.add_log("SUCCESS", f"[LLMReasoner] Score: {score}% ({rec}) for '{rfp.title[:40]}'")
+
+            eval_obj = RFPExecutionEvaluation(
+                rfp_id=rfp.id,
+                relevance_score=score,
+                is_relevant=eval_res.get("is_relevant", False),
+                why_relevant=eval_res.get("why_relevant", ""),
+                eai_deliverables=eval_res.get("eai_deliverables", []),
+                missing_requirements=eval_res.get("missing_requirements", []),
+                ai_summary=eval_res.get("ai_summary", ""),
+                recommendation=rec
+            )
+            self.db.add(eval_obj)
+            self.db.commit()
+
+            if rec == "PURSUE":
+                stats["pursued"] += 1
+
+            if eval_res.get("is_relevant"):
+                self.email_service.send_opportunity_alert(rfp_data, eval_res)
+                stats["emails_sent"] += 1
+
+        system_logger.add_log("SUCCESS", f"🏁 Batch AI Evaluation Completed! Evaluated: {stats['evaluated']} | Pursued: {stats['pursued']}")
         return stats

@@ -96,6 +96,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
     count_latest = 0
     count_archive = 0
+    count_pending = sum(1 for r in rfps if not r.evaluation)
     rfp_cards = ""
     evaluations_html = ""
 
@@ -113,6 +114,8 @@ def admin_dashboard(db: Session = Depends(get_db)):
             card_class = "rfp-card-archive"
 
         eval_obj = r.evaluation
+        if not eval_obj:
+            card_class = "rfp-card-pending " + card_class
         score = eval_obj.relevance_score if eval_obj else 0
         rec = eval_obj.recommendation if eval_obj else "REVIEW"
         summary = eval_obj.ai_summary if eval_obj else (r.raw_content[:140] + "...")
@@ -133,7 +136,10 @@ def admin_dashboard(db: Session = Depends(get_db)):
             except Exception:
                 pass
 
-        if rec == "PURSUE" or score >= 70:
+        if not eval_obj:
+            badge_bg = "#64748b"
+            badge_text = "🧠 UNASSESSED"
+        elif rec == "PURSUE" or score >= 70:
             badge_bg = "#0d9488"
             badge_text = f"{score}% PURSUE"
         elif rec == "PARTNER":
@@ -167,6 +173,17 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
         new_badge = '<span style="background: #e0f2fe; color: #0284c7; font-size: 0.68rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">NEW RUN</span>' if is_latest else ''
 
+        brief_action_btn = f"""
+        <button class="btn-ai-brief" onclick="openBriefModal('{r.id}')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+            AI Brief (12 Qs)
+        </button>
+        """ if eval_obj else f"""
+        <button class="btn-ai-brief" style="background: #8b5cf6; border: none; color: white;" onclick="evaluateSingleRFP('{r.id}', event)">
+            ⚡ Evaluate with AI
+        </button>
+        """
+
         rfp_cards += f"""
         <div class="opportunity-card {card_class}">
             <div class="card-header">
@@ -198,10 +215,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
             </div>
 
             <div class="card-actions">
-                <button class="btn-ai-brief" onclick="openBriefModal('{r.id}')">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-                    AI Brief (12 Qs)
-                </button>
+                {brief_action_btn}
                 <a href="{r.source_url}" target="_blank" class="btn-ext-link" title="Open Original Notice Page">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                 </a>
@@ -714,11 +728,15 @@ def admin_dashboard(db: Session = Depends(get_db)):
                     <div style="display: flex; gap: 10px;">
                         <button class="btn-trigger" onclick="triggerLiveScan(null)">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                            Trigger Live Procurement Crawl
+                            ▶️ Run Crawlers (Fast Scrape)
+                        </button>
+                        <button class="btn-trigger" style="background: #8b5cf6;" onclick="triggerEvaluateAllPending()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/></svg>
+                            🧠 Evaluate Pending RFPs ({count_pending} Pending)
                         </button>
                         <button class="btn-trigger" style="background: #ef4444;" onclick="cancelActiveCrawl()">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-                            Stop / Cancel Crawl
+                            Stop / Cancel
                         </button>
                     </div>
                 </div>
@@ -741,6 +759,9 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 <div class="sub-tab-bar" style="display: flex; gap: 10px; margin: 20px 0 16px 0;">
                     <button class="sub-tab-btn active" onclick="filterFeed('latest', this)">
                         ⚡ Latest Crawl Run ({count_latest})
+                    </button>
+                    <button class="sub-tab-btn" onclick="filterFeed('pending', this)" style="border: 1px solid #c084fc; color: #7e22ce;">
+                        🧠 Pending AI Evaluation ({count_pending})
                     </button>
                     <button class="sub-tab-btn" onclick="filterFeed('archive', this)">
                         📚 Historical Archive ({count_archive})
@@ -1012,6 +1033,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 const matchingCards = allCards.filter(card => {{
                     if (currentFeedType === 'all') return true;
                     if (currentFeedType === 'latest') return card.classList.contains('rfp-card-latest');
+                    if (currentFeedType === 'pending') return card.classList.contains('rfp-card-pending');
                     if (currentFeedType === 'archive') return card.classList.contains('rfp-card-archive');
                     return true;
                 }});
@@ -1383,6 +1405,32 @@ def admin_dashboard(db: Session = Depends(get_db)):
                     alert('Failed to toggle portal: ' + (e.message || e));
                 }}
             }}
+
+            async function triggerEvaluateAllPending() {{
+                appendConsoleLog('INFO', '🧠 Triggering Groq LLM evaluation for all unassessed RFPs...');
+                try {{
+                    const res = await fetch('/api/v1/evaluations/evaluate-all', {{ method: 'POST' }});
+                    const data = await res.json();
+                    appendConsoleLog('SUCCESS', '🏁 Batch evaluation complete! Evaluated: ' + (data.stats ? data.stats.evaluated : 0));
+                    window.location.reload();
+                }} catch (e) {{
+                    appendConsoleLog('ERROR', 'Batch evaluation error: ' + e);
+                }}
+            }}
+
+            async function evaluateSingleRFP(rfpId, ev) {{
+                if (ev && ev.preventDefault) ev.preventDefault();
+                appendConsoleLog('INFO', '⚡ Running AI evaluation for RFP #' + rfpId + '...');
+                try {{
+                    const res = await fetch('/api/v1/evaluations/' + encodeURIComponent(rfpId) + '/re-evaluate', {{ method: 'POST' }});
+                    const data = await res.json();
+                    appendConsoleLog('SUCCESS', '✅ Evaluation completed for RFP #' + rfpId);
+                    window.location.reload();
+                }} catch (e) {{
+                    appendConsoleLog('ERROR', 'Single evaluation error: ' + e);
+                    alert('Evaluation error: ' + e);
+                }}
+            }}
         </script>
     </body>
     </html>
@@ -1444,6 +1492,13 @@ def toggle_portal(portal_id: str, db: Session = Depends(get_db)):
     status_str = "ACTIVE (ON)" if portal.is_active else "INACTIVE (OFF)"
     system_logger.add_log("INFO", f"🔄 Portal '{portal.name}' toggled to {status_str}.")
     return {"status": "success", "portal_id": portal.portal_id, "is_active": portal.is_active}
+
+@app.post("/api/v1/evaluations/evaluate-all")
+async def evaluate_all_pending(db: Session = Depends(get_db)):
+    system_logger.add_log("INFO", "🧠 Batch evaluation triggered for pending RFPs...")
+    pipeline = RFPIntelligencePipeline(db)
+    stats = await pipeline.evaluate_pending_rfps()
+    return {"status": "success", "stats": stats}
 
 @app.post("/api/v1/evaluations/{rfp_id}/re-evaluate")
 async def re_evaluate_rfp(rfp_id: str, db: Session = Depends(get_db)):
