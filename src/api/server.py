@@ -43,6 +43,21 @@ def admin_dashboard(db: Session = Depends(get_db)):
     portals = db.query(ProcurementPortal).all()
     rfps = db.query(RFPOpportunity).order_by(RFPOpportunity.created_at.desc()).all()
 
+    # Sort RFPs so PURSUE / high match score tags come 1st, REVIEW tags come later
+    def get_rfp_priority_key(r):
+        eval_obj = r.evaluation
+        score = eval_obj.relevance_score if eval_obj else 0
+        rec = eval_obj.recommendation if eval_obj else "REVIEW"
+        if rec == "PURSUE" or score >= 70:
+            tier = 3
+        elif rec == "PARTNER":
+            tier = 2
+        else:
+            tier = 1
+        return (tier, score)
+
+    rfps = sorted(rfps, key=get_rfp_priority_key, reverse=True)
+
     portal_rows = "".join(f"""
         <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="padding: 14px 16px; font-weight: 600; color: #1e293b;">{p.name}</td>
