@@ -52,8 +52,27 @@ def admin_dashboard(db: Session = Depends(get_db)):
     import json
     rfp_map_dict = {}
 
-    rfp_cards = ""
+    # Identify latest batch
+    latest_batch_id = None
     for r in rfps:
+        if getattr(r, 'batch_id', None):
+            latest_batch_id = r.batch_id
+            break
+
+    count_latest = 0
+    count_archive = 0
+    rfp_cards = ""
+
+    for r in rfps:
+        b_id = getattr(r, 'batch_id', None)
+        is_latest = (latest_batch_id and b_id == latest_batch_id) or (not latest_batch_id and (count_latest < 3 or len(rfps) <= 3))
+        if is_latest:
+            count_latest += 1
+            card_class = "rfp-card-latest"
+        else:
+            count_archive += 1
+            card_class = "rfp-card-archive"
+
         eval_obj = r.evaluation
         score = eval_obj.relevance_score if eval_obj else 0
         rec = eval_obj.recommendation if eval_obj else "REVIEW"
@@ -107,10 +126,15 @@ def admin_dashboard(db: Session = Depends(get_db)):
             "rec": rec
         }
 
+        new_badge = '<span style="background: #e0f2fe; color: #0284c7; font-size: 0.68rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">NEW RUN</span>' if is_latest else ''
+
         rfp_cards += f"""
-        <div class="opportunity-card">
+        <div class="opportunity-card {card_class}">
             <div class="card-header">
-                <span class="portal-tag">{portal_tag}</span>
+                <div>
+                    <span class="portal-tag">{portal_tag}</span>
+                    {new_badge}
+                </div>
                 <span class="score-badge" style="background-color: {badge_bg};">{badge_text}</span>
             </div>
 
@@ -135,7 +159,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
             </div>
 
             <div class="card-actions">
-                <button class="btn-ai-brief" onclick="openBriefModal({r.id})">
+                <button class="btn-ai-brief" onclick="openBriefModal('{r.id}')">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
                     AI Brief (12 Qs)
                 </button>
@@ -538,6 +562,27 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 color: #0284c7;
                 border-color: #bae6fd;
             }}
+            .sub-tab-btn {{
+                background: #ffffff;
+                border: 1px solid #cbd5e1;
+                color: #475569;
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-size: 0.85rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }}
+            .sub-tab-btn:hover {{
+                background: #f1f5f9;
+                color: #0f172a;
+            }}
+            .sub-tab-btn.active {{
+                background: #0284c7;
+                color: #ffffff;
+                border-color: #0284c7;
+                box-shadow: 0 2px 8px rgba(2, 132, 199, 0.2);
+            }}
         </style>
     </head>
     <body>
@@ -590,6 +635,19 @@ def admin_dashboard(db: Session = Depends(get_db)):
                     <div class="log-box" id="logConsole">
                         <div class="log-entry"><span class="log-time">[System]</span> <span class="log-level-INFO">Connecting to live event logger stream...</span></div>
                     </div>
+                </div>
+
+                <!-- Sub-tabs for Latest Run vs Archive -->
+                <div class="sub-tab-bar" style="display: flex; gap: 10px; margin: 20px 0 16px 0;">
+                    <button class="sub-tab-btn active" onclick="filterFeed('latest', this)">
+                        ⚡ Latest Crawl Run ({count_latest})
+                    </button>
+                    <button class="sub-tab-btn" onclick="filterFeed('archive', this)">
+                        📚 Historical Archive ({count_archive})
+                    </button>
+                    <button class="sub-tab-btn" onclick="filterFeed('all', this)">
+                        🌐 All Opportunities ({len(rfps)})
+                    </button>
                 </div>
 
                 <div class="cards-grid">
@@ -763,6 +821,21 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
                 document.getElementById('tab-' + tabId).classList.add('active');
                 el.classList.add('active');
+            }}
+
+            function filterFeed(type, el) {{
+                document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+                el.classList.add('active');
+                
+                document.querySelectorAll('.opportunity-card').forEach(card => {{
+                    if (type === 'all') {{
+                        card.style.display = 'flex';
+                    }} else if (type === 'latest') {{
+                        card.style.display = card.classList.contains('rfp-card-latest') ? 'flex' : 'none';
+                    }} else if (type === 'archive') {{
+                        card.style.display = card.classList.contains('rfp-card-archive') ? 'flex' : 'none';
+                    }}
+                }});
             }}
 
             function openBriefModal(rfpId) {{

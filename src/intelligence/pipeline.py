@@ -41,16 +41,29 @@ class RFPIntelligencePipeline:
         if target_portal_id:
             active_adapters = [a for a in self.adapters if a.portal_id == target_portal_id]
 
+        from datetime import datetime
+        batch_id = f"batch_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+
         for adapter in active_adapters:
-            system_logger.add_log("INFO", f"[Pipeline] Starting execution of adapter: {adapter.portal_name}")
+            system_logger.add_log("INFO", f"[Pipeline] Starting execution of adapter: {adapter.portal_name} (Batch: {batch_id})")
             rfps = await adapter.fetch_latest_rfps(max_items=10)
             stats["scraped"] += len(rfps)
 
             for rfp_data in rfps:
                 ext_id = rfp_data.get("external_rfp_id")
-                existing = self.db.query(RFPOpportunity).filter_by(external_rfp_id=ext_id).first()
+                source_url = rfp_data.get("source_url")
+                title = rfp_data.get("title")
+                org = rfp_data.get("issuing_org")
+
+                # Multi-field deduplication check
+                existing = self.db.query(RFPOpportunity).filter(
+                    (RFPOpportunity.external_rfp_id == ext_id) |
+                    (RFPOpportunity.source_url == source_url) |
+                    ((RFPOpportunity.title == title) & (RFPOpportunity.issuing_org == org))
+                ).first()
+
                 if existing:
-                    system_logger.add_log("INFO", f"[Pipeline] Skipping existing record: {ext_id}")
+                    system_logger.add_log("INFO", f"[Pipeline] Skipping duplicate record: '{title[:40]}'")
                     continue
 
                 # Stage 1: Deterministic hard filter
@@ -62,7 +75,7 @@ class RFPIntelligencePipeline:
                 stats["stage1_passed"] += 1
                 system_logger.add_log("SUCCESS", f"[Stage1Filter] Passed: '{rfp_data['title'][:50]}'")
 
-                # Save RFP opportunity record
+                # Save RFP opportunity record with batch_id
                 rfp_obj = RFPOpportunity(
                     portal_id=rfp_data["portal_id"],
                     external_rfp_id=ext_id,
@@ -74,7 +87,8 @@ class RFPIntelligencePipeline:
                     publication_date=rfp_data.get("publication_date"),
                     submission_deadline=rfp_data.get("submission_deadline"),
                     estimated_value_usd=rfp_data.get("estimated_value_usd", 0.0),
-                    raw_content=rfp_data.get("raw_content", "")
+                    raw_content=rfp_data.get("raw_content", ""),
+                    batch_id=batch_id
                 )
                 self.db.add(rfp_obj)
                 self.db.flush()

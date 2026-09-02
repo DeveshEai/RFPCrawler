@@ -35,6 +35,7 @@ class RFPOpportunity(Base):
     submission_deadline = Column(String(20))
     estimated_value_usd = Column(Float, default=0.0)
     raw_content = Column(Text)
+    batch_id = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     portal = relationship("ProcurementPortal", back_populates="opportunities")
