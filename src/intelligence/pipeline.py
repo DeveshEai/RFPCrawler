@@ -3,6 +3,8 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from src.db.models import ProcurementPortal, RFPOpportunity, RFPExecutionEvaluation
 from src.sources.contracts_finder_adapter import ContractsFinderAdapter
+from src.sources.find_a_tender_adapter import FindATenderAdapter
+from src.sources.global_tech_tenders_adapter import GlobalTechTendersAdapter
 from src.intelligence.stage1_filter import Stage1DeterministicFilter
 from src.intelligence.llm_reasoner import LLMOpportunityReasoner
 from src.services.email_service import EmailAlertService
@@ -12,7 +14,9 @@ class RFPIntelligencePipeline:
     def __init__(self, db: Session):
         self.db = db
         self.adapters = [
-            ContractsFinderAdapter()
+            ContractsFinderAdapter(),
+            FindATenderAdapter(),
+            GlobalTechTendersAdapter()
         ]
         self.stage1_filter = Stage1DeterministicFilter()
         self.reasoner = LLMOpportunityReasoner()
@@ -46,7 +50,7 @@ class RFPIntelligencePipeline:
 
         for adapter in active_adapters:
             system_logger.add_log("INFO", f"[Pipeline] Starting execution of adapter: {adapter.portal_name} (Batch: {batch_id})")
-            rfps = await adapter.fetch_latest_rfps(max_items=10)
+            rfps = await adapter.fetch_latest_rfps(max_items=30)
             stats["scraped"] += len(rfps)
 
             for rfp_data in rfps:

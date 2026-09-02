@@ -38,14 +38,10 @@ def resync_knowledge_base(domain: str = Query(...)):
 
 @app.get("/", response_class=HTMLResponse)
 def admin_dashboard(db: Session = Depends(get_db)):
+    pipeline = RFPIntelligencePipeline(db)
+    pipeline._ensure_portals_seeded()
     portals = db.query(ProcurementPortal).all()
     rfps = db.query(RFPOpportunity).order_by(RFPOpportunity.created_at.desc()).all()
-
-    if not rfps:
-        pipeline = RFPIntelligencePipeline(db)
-        pipeline._ensure_portals_seeded()
-        portals = db.query(ProcurementPortal).all()
-        rfps = db.query(RFPOpportunity).order_by(RFPOpportunity.created_at.desc()).all()
 
     portal_rows = "".join(f"""
         <tr style="border-bottom: 1px solid #e2e8f0;">
