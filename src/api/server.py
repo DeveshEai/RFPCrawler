@@ -73,9 +73,9 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
     def render_status_badge(p):
         if p.is_active:
-            return f'''<button onclick="togglePortal('{p.portal_id}')" style="background: #dcfce7; color: #15803d; border: 1px solid #86efac; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">🟢 ACTIVE (ON)</button>'''
+            return f'''<button type="button" onclick="togglePortal('{p.portal_id}', event)" style="background: #dcfce7; color: #15803d; border: 1px solid #86efac; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">🟢 ACTIVE (ON)</button>'''
         else:
-            return f'''<button onclick="togglePortal('{p.portal_id}')" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">⚪ INACTIVE (OFF)</button>'''
+            return f'''<button type="button" onclick="togglePortal('{p.portal_id}', event)" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">⚪ INACTIVE (OFF)</button>'''
 
     portal_rows = "".join(f"""
         <tr style="border-bottom: 1px solid #e2e8f0;">
@@ -84,7 +84,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
             <td style="padding: 14px 16px;">{render_status_badge(p)}</td>
             <td style="padding: 14px 16px;"><a href="{p.base_url}" target="_blank" style="color: #0284c7; text-decoration: none; font-weight: 500;">{p.base_url}</a></td>
             <td style="padding: 14px 16px;">
-                <button onclick="triggerLiveScan('{p.portal_id}')" style="background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem;">
+                <button type="button" onclick="triggerLiveScan('{p.portal_id}', event)" style="background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem;">
                     ▶️ Run Adapter
                 </button>
             </td>
@@ -1363,14 +1363,24 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 }}
             }}
 
-            async function togglePortal(portalId) {{
+            async function togglePortal(portalId, ev) {{
+                if (ev && ev.preventDefault) ev.preventDefault();
                 appendConsoleLog('INFO', '🔄 Toggling portal active state for ' + portalId + '...');
                 try {{
-                    const res = await fetch('/api/v1/portals/' + encodeURIComponent(portalId) + '/toggle', {{ method: 'POST' }});
+                    const res = await fetch('/api/v1/portals/' + encodeURIComponent(portalId) + '/toggle', {{ 
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }}
+                    }});
+                    if (!res.ok) {{
+                        const errText = await res.text();
+                        alert('Failed to toggle portal: HTTP ' + res.status + ' - ' + errText);
+                        return;
+                    }}
                     const data = await res.json();
                     window.location.reload();
                 }} catch (e) {{
-                    alert('Failed to toggle portal: ' + e);
+                    console.error('Toggle error:', e);
+                    alert('Failed to toggle portal: ' + (e.message || e));
                 }}
             }}
         </script>
