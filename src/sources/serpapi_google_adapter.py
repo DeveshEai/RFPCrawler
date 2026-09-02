@@ -1,6 +1,8 @@
 import asyncio
 import httpx
 import re
+import hashlib
+import random
 from typing import List, Dict, Any
 from src.sources.base_adapter import BasePortalAdapter
 from src.services.logger_service import system_logger
@@ -37,25 +39,32 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
             system_logger.add_log("WARN", "[SerpApiGoogleAdapter] SERPAPI_KEY not configured in .env. Skipping Google search crawl.")
             return results
 
+        # Precise Google Dorks targeting specific contract notice pages
         queries = [
-            'Request for Proposal Pega AI Digital Transformation site:service.gov.uk',
-            'Tender Notice Cloud Migration Microservices Automation site:gov.uk',
-            'RFP Software Development Artificial Intelligence site:gov',
-            'Solicitation Workflow Automation Pega site:sam.gov'
+            'intitle:"Contract Notice" "AI" OR "Software" site:service.gov.uk',
+            'intitle:"Tender" "Digital Transformation" OR "Automation" site:gov.uk',
+            'intitle:"Solicitation" "Artificial Intelligence" OR "Cloud" site:sam.gov',
+            '"Request for Proposal" "Cyber Security" OR "Software" site:gov.uk',
+            'intitle:"RFP" "Workflow" OR "Pega" site:service.gov.uk',
+            'intitle:"Tender Notice" "Data Platform" OR "Machine Learning" site:gov.uk'
         ]
 
+        # Pick 3 queries per run to vary results
+        selected_queries = random.sample(queries, min(3, len(queries)))
+
         async with httpx.AsyncClient(timeout=25.0) as client:
-            for q in queries:
+            for q in selected_queries:
                 try:
-                    system_logger.add_log("INFO", f"[SerpApiGoogleAdapter] Querying SerpAPI: {q[:60]}...")
+                    system_logger.add_log("INFO", f"[SerpApiGoogleAdapter] Querying Google SerpAPI: '{q[:60]}...'")
                     params = {
                         "engine": "google",
                         "q": q,
+                        "tbs": "qdr:m",  # Past month to fetch recent live opportunities
                         "api_key": api_key
                     }
                     resp = await client.get(f"{self.base_url}/search.json", params=params)
 
-                    if resp.status_code == 401 or resp.status_code == 403:
+                    if resp.status_code in (401, 403):
                         system_logger.add_log("WARN", "[SerpApiGoogleAdapter] SerpAPI key unauthorized. Please check your key at https://serpapi.com.")
                         break
 
@@ -70,16 +79,22 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
                         if len(results) >= max_items:
                             break
 
-                        title = item.get("title", "")
-                        snippet = item.get("snippet", "")
-                        link = item.get("link", "")
+                        title = item.get("title", "").strip()
+                        snippet = item.get("snippet", "").strip()
+                        link = item.get("link", "").strip()
                         domain = item.get("displayed_link", "Google Search Portal")
 
                         if not title or not link:
                             continue
 
+                        # Filter out generic search result aggregator landing pages
+                        lower_title = title.lower()
+                        if "search results" in lower_title or "search page" in lower_title or lower_title == "find a tender":
+                            continue
+
+                        link_hash = hashlib.md5(link.encode('utf-8')).hexdigest()[:12]
                         results.append({
-                            "external_rfp_id": f"google_serpapi_{hash(link) & 0xFFFFFFFF}",
+                            "external_rfp_id": f"google_serpapi_{link_hash}",
                             "title": title,
                             "issuing_org": domain,
                             "country": "Global",

@@ -7,6 +7,7 @@ from src.db.database import Base, engine, get_db
 import src.db.models as models
 from src.db.models import ProcurementPortal, RFPOpportunity, RFPExecutionEvaluation
 from src.intelligence.pipeline import RFPIntelligencePipeline
+from src.intelligence.llm_reasoner import LLMOpportunityReasoner
 from src.services.logger_service import system_logger
 from config import settings
 
@@ -91,6 +92,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
     count_latest = 0
     count_archive = 0
     rfp_cards = ""
+    evaluations_html = ""
 
     for r in rfps:
         b_id = getattr(r, 'batch_id', None)
@@ -198,6 +200,57 @@ def admin_dashboard(db: Session = Depends(get_db)):
             </div>
         </div>
         """
+
+        if eval_obj:
+            deliv_li = "".join([f'<li style="margin-bottom: 4px;">• {d}</li>' for d in deliverables])
+            gap_li = "".join([f'<li style="margin-bottom: 4px;">• {g}</li>' for g in gaps])
+            rec_tag = f'<span id="eval-badge-{r.id}" style="background: {badge_bg}; color: white; padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 0.78rem;">{badge_text}</span>'
+            search_blob = f"{r.title} {org_name} {summary} {' '.join(deliverables)} {' '.join(gaps)}".replace('"', "'")
+
+            evaluations_html += f"""
+            <div class="eval-card" id="eval-card-{r.id}" data-rec="{rec}" data-score="{score}" data-portal="{r.portal_id}" data-text="{search_blob}" style="background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div style="max-width: 75%;">
+                        <span style="font-size: 0.72rem; font-weight: 700; color: #0284c7; background: #e0f2fe; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.5px;">{portal_tag}</span>
+                        <h3 style="font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 8px 0 4px 0;">{r.title}</h3>
+                        <p style="font-size: 0.85rem; color: #64748b; margin: 0;">Issuing Authority: <strong>{org_name}</strong></p>
+                    </div>
+                    <div style="text-align: right;">
+                        {rec_tag}
+                        <div id="eval-score-{r.id}" style="font-size: 1.35rem; font-weight: 800; color: #0f172a; margin-top: 6px;">{score}% Match</div>
+                    </div>
+                </div>
+
+                <div style="background: #f8fafc; border-left: 4px solid #0284c7; padding: 12px 16px; border-radius: 6px; margin: 14px 0; font-size: 0.88rem; color: #334155; line-height: 1.5;">
+                    <strong style="color: #0284c7;">Executive AI Summary:</strong> <span id="eval-summary-{r.id}">{summary}</span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px;">
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 14px; border-radius: 8px;">
+                        <strong style="color: #166534; font-size: 0.85rem;">Matched Practice Deliverables:</strong>
+                        <ul id="eval-deliv-{r.id}" style="list-style: none; padding: 0; margin: 8px 0 0 0; font-size: 0.82rem; color: #14532d;">
+                            {deliv_li or '<li>• Enterprise Application Integration</li>'}
+                        </ul>
+                    </div>
+                    <div style="background: #fff1f2; border: 1px solid #fecdd3; padding: 14px; border-radius: 8px;">
+                        <strong style="color: #9f1239; font-size: 0.85rem;">Missing Requirements / Partner Gaps:</strong>
+                        <ul id="eval-gaps-{r.id}" style="list-style: none; padding: 0; margin: 8px 0 0 0; font-size: 0.82rem; color: #881337;">
+                            {gap_li or '<li>• None identified</li>'}
+                        </ul>
+                    </div>
+                </div>
+
+                <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 14px;">
+                    <a href="{r.source_url}" target="_blank" style="color: #0284c7; text-decoration: none; font-weight: 600; font-size: 0.85rem;">View Original RFP Notice ↗</a>
+                    <button id="eval-btn-{r.id}" onclick="reEvaluateRfp('{r.id}')" style="background: #0f172a; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">
+                        ⚡ Re-Evaluate with AI
+                    </button>
+                </div>
+
+                <!-- Dedicated In-Card Live Evaluation Output Log -->
+                <div id="eval-log-{r.id}" style="display: none; background: #0f172a; color: #38bdf8; font-family: monospace; font-size: 0.78rem; padding: 10px 14px; border-radius: 8px; margin-top: 14px; line-height: 1.5;"></div>
+            </div>
+            """
 
     rfp_json_str = json.dumps(rfp_map_dict, ensure_ascii=False)
 
@@ -634,6 +687,10 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10z"/></svg>
                 Portal Adapters
             </a>
+            <a class="nav-item" onclick="switchTab('evaluations', this)">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                AI Evaluations
+            </a>
             <a class="nav-item" onclick="switchTab('settings', this)">
                 <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
                 Alert Settings
@@ -649,11 +706,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
                     <div style="display: flex; gap: 10px;">
                         <button class="btn-trigger" onclick="triggerLiveScan(null)">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                            Trigger Standard Portals Crawl
-                        </button>
-                        <button class="btn-trigger" style="background: #0284c7;" onclick="triggerLiveScan('google_serpapi')">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            Trigger Google SerpAPI Crawl
+                            Trigger Live Procurement Crawl
                         </button>
                         <button class="btn-trigger" style="background: #ef4444;" onclick="cancelActiveCrawl()">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
@@ -691,6 +744,15 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
                 <div class="cards-grid">
                     {rfp_cards}
+                </div>
+
+                <!-- Opportunity Feed Pagination Bar (10 per page) -->
+                <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 14px 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                    <div style="font-size: 0.85rem; color: #64748b; font-weight: 500;" id="feedPageInfo">
+                        Showing 1-10 of opportunities
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center;" id="feedPaginationControls">
+                    </div>
                 </div>
             </div>
 
@@ -772,6 +834,58 @@ def admin_dashboard(db: Session = Depends(get_db)):
                             {portal_rows}
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- AI Evaluations Tab -->
+            <div id="tab-evaluations" class="tab-view">
+                <div class="top-bar">
+                    <h1 class="page-title">AI Opportunity Evaluations</h1>
+                    <div style="font-size: 0.85rem; color: #64748b; font-weight: 500;">
+                        Deep LLM Reasoning Results & Capabilities Alignment
+                    </div>
+                </div>
+
+                <!-- Evaluation Filter Controls -->
+                <div style="background: white; padding: 16px 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 24px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px; flex: 1; align-items: center;">
+                        <input type="text" id="evalSearchFilter" onkeyup="filterEvaluations()" placeholder="🔍 Search RFP title, authority, deliverables..." style="padding: 9px 14px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.88rem; min-width: 260px; flex: 1;">
+                        
+                        <select id="evalRecFilter" onchange="filterEvaluations()" style="padding: 9px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.85rem; font-weight: 500; background: white; color: #334155; cursor: pointer;">
+                            <option value="all">All Recommendations</option>
+                            <option value="PURSUE">⚡ PURSUE Only</option>
+                            <option value="PARTNER">🤝 PARTNER Only</option>
+                            <option value="REVIEW">🔍 REVIEW Only</option>
+                        </select>
+
+                        <select id="evalScoreFilter" onchange="filterEvaluations()" style="padding: 9px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.85rem; font-weight: 500; background: white; color: #334155; cursor: pointer;">
+                            <option value="0">All Match Scores</option>
+                            <option value="80">Match Score ≥ 80%</option>
+                            <option value="70">Match Score ≥ 70%</option>
+                            <option value="50">Match Score ≥ 50%</option>
+                        </select>
+
+                        <select id="evalPortalFilter" onchange="filterEvaluations()" style="padding: 9px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.85rem; font-weight: 500; background: white; color: #334155; cursor: pointer;">
+                            <option value="all">All Source Portals</option>
+                            <option value="contracts_finder">Contracts Finder (UK)</option>
+                            <option value="find_a_tender">Find a Tender (UK)</option>
+                            <option value="global_sam_gov">SAM.gov (US)</option>
+                            <option value="google_serpapi">Google SerpAPI</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    {evaluations_html or '<div style="background: white; padding: 40px; border-radius: 12px; text-align: center; color: #64748b;">No AI evaluations recorded yet. Run a live procurement crawl or click Re-Evaluate on an opportunity.</div>'}
+                </div>
+
+                <!-- AI Evaluation Pagination Bar (10 per page) -->
+                <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 14px 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                    <div style="font-size: 0.85rem; color: #64748b; font-weight: 500;" id="evalPageInfo">
+                        Showing evaluations
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center;" id="evalPaginationControls">
+                    </div>
                 </div>
             </div>
 
@@ -863,19 +977,77 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 el.classList.add('active');
             }}
 
+            let currentFeedType = 'latest';
+            let currentFeedPage = 1;
+            const pageSize = 10;
+
             function filterFeed(type, el) {{
-                document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
-                el.classList.add('active');
-                
-                document.querySelectorAll('.opportunity-card').forEach(card => {{
-                    if (type === 'all') {{
+                if (el) {{
+                    document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+                    el.classList.add('active');
+                }}
+                currentFeedType = type;
+                currentFeedPage = 1;
+                renderFeedPagination();
+            }}
+
+            function changeFeedPage(page) {{
+                currentFeedPage = page;
+                renderFeedPagination();
+                window.scrollTo({{ top: 0, behavior: 'smooth' }});
+            }}
+
+            function renderFeedPagination() {{
+                const allCards = Array.from(document.querySelectorAll('.opportunity-card'));
+                const matchingCards = allCards.filter(card => {{
+                    if (currentFeedType === 'all') return true;
+                    if (currentFeedType === 'latest') return card.classList.contains('rfp-card-latest');
+                    if (currentFeedType === 'archive') return card.classList.contains('rfp-card-archive');
+                    return true;
+                }});
+
+                const totalItems = matchingCards.length;
+                const totalPages = Math.ceil(totalItems / pageSize) || 1;
+                if (currentFeedPage > totalPages) currentFeedPage = totalPages;
+                if (currentFeedPage < 1) currentFeedPage = 1;
+
+                const startIndex = (currentFeedPage - 1) * pageSize;
+                const endIndex = startIndex + pageSize;
+
+                allCards.forEach(c => c.style.display = 'none');
+
+                matchingCards.forEach((card, idx) => {{
+                    if (idx >= startIndex && idx < endIndex) {{
                         card.style.display = 'flex';
-                    }} else if (type === 'latest') {{
-                        card.style.display = card.classList.contains('rfp-card-latest') ? 'flex' : 'none';
-                    }} else if (type === 'archive') {{
-                        card.style.display = card.classList.contains('rfp-card-archive') ? 'flex' : 'none';
                     }}
                 }});
+
+                const displayedStart = totalItems === 0 ? 0 : startIndex + 1;
+                const displayedEnd = Math.min(endIndex, totalItems);
+                const infoElem = document.getElementById('feedPageInfo');
+                if (infoElem) {{
+                    infoElem.innerText = 'Showing ' + displayedStart + '-' + displayedEnd + ' of ' + totalItems + ' opportunities (' + pageSize + ' per page)';
+                }}
+
+                const ctrlElem = document.getElementById('feedPaginationControls');
+                if (ctrlElem) {{
+                    let btnHtml = '';
+                    const prevDisabled = currentFeedPage === 1 ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : '';
+                    btnHtml += '<button onclick="changeFeedPage(' + (currentFeedPage - 1) + ')" ' + prevDisabled + ' style="padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; font-weight: 600; font-size: 0.8rem; cursor: pointer;">← Prev</button>';
+
+                    for (let p = 1; p <= totalPages; p++) {{
+                        const isCurrent = p === currentFeedPage;
+                        const style = isCurrent 
+                            ? 'background: #0284c7; color: white; border: 1px solid #0284c7;' 
+                            : 'background: white; color: #334155; border: 1px solid #cbd5e1;';
+                        btnHtml += '<button onclick="changeFeedPage(' + p + ')" style="padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; ' + style + '">' + p + '</button>';
+                    }}
+
+                    const nextDisabled = currentFeedPage === totalPages ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : '';
+                    btnHtml += '<button onclick="changeFeedPage(' + (currentFeedPage + 1) + ')" ' + nextDisabled + ' style="padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; font-weight: 600; font-size: 0.8rem; cursor: pointer;">Next →</button>';
+
+                    ctrlElem.innerHTML = btnHtml;
+                }}
             }}
 
             function openBriefModal(rfpId) {{
@@ -916,6 +1088,197 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 document.getElementById('briefModal').classList.remove('active');
             }}
 
+            function appendEvalConsoleLog(level, message) {{
+                const container = document.getElementById('evalLogConsole');
+                if (!container) return;
+                const now = new Date();
+                const timeStr = now.toTimeString().split(' ')[0];
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                entry.innerHTML = '<span class="log-time">[' + timeStr + ']</span> <span class="log-level-' + level + '">' + message + '</span>';
+                container.appendChild(entry);
+                container.scrollTop = container.scrollHeight;
+            }}
+
+            async function reEvaluateRfp(rfpId) {{
+                const btn = document.getElementById('eval-btn-' + rfpId);
+                const cardLog = document.getElementById('eval-log-' + rfpId);
+                
+                if (btn) {{
+                    btn.disabled = true;
+                    btn.style.opacity = '0.7';
+                    btn.innerHTML = '⚡ Re-Evaluating with Groq LLM...';
+                }}
+                
+                if (cardLog) {{
+                    cardLog.style.display = 'block';
+                    cardLog.innerHTML = '⏳ <span style="color: #fbbf24;">[Evaluating]</span> Sending notice details to Groq LLM reasoner...';
+                }}
+
+                appendEvalConsoleLog('INFO', '⚡ Triggering Groq LLM re-evaluation for RFP ID: ' + rfpId + '...');
+                appendConsoleLog('INFO', '⚡ Triggering Groq LLM re-evaluation for RFP ID: ' + rfpId + '...');
+
+                try {{
+                    const res = await fetch('/api/v1/evaluations/' + encodeURIComponent(rfpId) + '/re-evaluate', {{ method: 'POST' }});
+                    const data = await res.json();
+                    
+                    if (data.status === 'success') {{
+                        const rec = data.recommendation;
+                        const score = data.score;
+                        
+                        let badgeBg = '#0284c7';
+                        if (rec === 'PURSUE') badgeBg = '#16a34a';
+                        else if (rec === 'PARTNER') badgeBg = '#eab308';
+                        else if (rec === 'PASS' || rec === 'NO-GO' || rec === 'REVIEW') badgeBg = '#dc2626';
+
+                        const badgeElem = document.getElementById('eval-badge-' + rfpId);
+                        if (badgeElem) {{
+                            badgeElem.innerText = rec;
+                            badgeElem.style.backgroundColor = badgeBg;
+                        }}
+                        
+                        const scoreElem = document.getElementById('eval-score-' + rfpId);
+                        if (scoreElem) {{
+                            scoreElem.innerText = score + '% Match';
+                        }}
+
+                        const cardElem = document.getElementById('eval-card-' + rfpId);
+                        if (cardElem) {{
+                            cardElem.setAttribute('data-rec', rec);
+                            cardElem.setAttribute('data-score', score);
+                        }}
+
+                        const summaryElem = document.getElementById('eval-summary-' + rfpId);
+                        if (summaryElem && data.ai_summary) {{
+                            summaryElem.innerText = data.ai_summary;
+                        }}
+
+                        const delivElem = document.getElementById('eval-deliv-' + rfpId);
+                        if (delivElem && data.eai_deliverables) {{
+                            const delivs = Array.isArray(data.eai_deliverables) ? data.eai_deliverables : [data.eai_deliverables];
+                            delivElem.innerHTML = delivs.map(d => '<li style="margin-bottom: 4px;">• ' + d + '</li>').join('');
+                        }}
+
+                        const gapsElem = document.getElementById('eval-gaps-' + rfpId);
+                        if (gapsElem && data.missing_requirements) {{
+                            const gaps = Array.isArray(data.missing_requirements) ? data.missing_requirements : [data.missing_requirements];
+                            gapsElem.innerHTML = gaps.map(g => '<li style="margin-bottom: 4px;">• ' + g + '</li>').join('');
+                        }}
+
+                        if (cardLog) {{
+                            cardLog.innerHTML = '✅ <span style="color: #4ade80;">[Evaluation Complete]</span> Score: <strong>' + score + '%</strong> (' + rec + ')';
+                        }}
+
+                        appendEvalConsoleLog('SUCCESS', '⚡ Re-evaluation complete! New Score: ' + score + '% (' + rec + ')');
+                        appendConsoleLog('SUCCESS', '⚡ Re-evaluation complete for RFP ID: ' + rfpId + '! Score: ' + score + '% (' + rec + ')');
+
+                    }} else {{
+                        const err = data.detail || 'Unknown error';
+                        if (cardLog) {{
+                            cardLog.innerHTML = '❌ <span style="color: #f87171;">[Evaluation Failed]</span> ' + err;
+                        }}
+                        appendEvalConsoleLog('ERROR', 'Re-evaluation failed: ' + err);
+                        appendConsoleLog('ERROR', 'Re-evaluation failed: ' + err);
+                    }}
+                }} catch (e) {{
+                    if (cardLog) {{
+                        cardLog.innerHTML = '❌ <span style="color: #f87171;">[Evaluation Error]</span> ' + e;
+                    }}
+                    appendEvalConsoleLog('ERROR', 'Re-evaluation error: ' + e);
+                    appendConsoleLog('ERROR', 'Re-evaluation error: ' + e);
+                }} finally {{
+                    if (btn) {{
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                        btn.innerHTML = '⚡ Re-Evaluate with AI';
+                    }}
+                }}
+            }}
+
+            let currentEvalPage = 1;
+            const evalPageSize = 10;
+
+            function filterEvaluations(resetPage = true) {{
+                if (resetPage) {{
+                    currentEvalPage = 1;
+                }}
+                renderEvalPagination();
+            }}
+
+            function changeEvalPage(page) {{
+                currentEvalPage = page;
+                filterEvaluations(false);
+                window.scrollTo({{ top: 0, behavior: 'smooth' }});
+            }}
+
+            function renderEvalPagination() {{
+                const recFilter = document.getElementById('evalRecFilter');
+                if (!recFilter) return;
+
+                const recVal = recFilter.value;
+                const minScore = parseInt(document.getElementById('evalScoreFilter').value || '0');
+                const portalVal = document.getElementById('evalPortalFilter').value;
+                const searchVal = document.getElementById('evalSearchFilter').value.toLowerCase().trim();
+
+                const allCards = Array.from(document.querySelectorAll('.eval-card'));
+                const matchingCards = allCards.filter(card => {{
+                    const cRec = card.getAttribute('data-rec') || '';
+                    const cScore = parseInt(card.getAttribute('data-score') || '0');
+                    const cPortal = card.getAttribute('data-portal') || '';
+                    const cText = (card.getAttribute('data-text') || '').toLowerCase();
+
+                    const matchRec = (recVal === 'all' || cRec === recVal);
+                    const matchScore = (cScore >= minScore);
+                    const matchPortal = (portalVal === 'all' || cPortal === portalVal);
+                    const matchSearch = (!searchVal || cText.includes(searchVal));
+
+                    return matchRec && matchScore && matchPortal && matchSearch;
+                }});
+
+                const totalItems = matchingCards.length;
+                const totalPages = Math.ceil(totalItems / evalPageSize) || 1;
+                if (currentEvalPage > totalPages) currentEvalPage = totalPages;
+                if (currentEvalPage < 1) currentEvalPage = 1;
+
+                const startIndex = (currentEvalPage - 1) * evalPageSize;
+                const endIndex = startIndex + evalPageSize;
+
+                allCards.forEach(c => c.style.display = 'none');
+
+                matchingCards.forEach((card, idx) => {{
+                    if (idx >= startIndex && idx < endIndex) {{
+                        card.style.display = 'block';
+                    }}
+                }});
+
+                const displayedStart = totalItems === 0 ? 0 : startIndex + 1;
+                const displayedEnd = Math.min(endIndex, totalItems);
+                const infoElem = document.getElementById('evalPageInfo');
+                if (infoElem) {{
+                    infoElem.innerText = 'Showing ' + displayedStart + '-' + displayedEnd + ' of ' + totalItems + ' evaluations (' + evalPageSize + ' per page)';
+                }}
+
+                const ctrlElem = document.getElementById('evalPaginationControls');
+                if (ctrlElem) {{
+                    let btnHtml = '';
+                    const prevDisabled = currentEvalPage === 1 ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : '';
+                    btnHtml += '<button onclick="changeEvalPage(' + (currentEvalPage - 1) + ')" ' + prevDisabled + ' style="padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; font-weight: 600; font-size: 0.8rem; cursor: pointer;">← Prev</button>';
+
+                    for (let p = 1; p <= totalPages; p++) {{
+                        const isCurrent = p === currentEvalPage;
+                        const style = isCurrent 
+                            ? 'background: #0284c7; color: white; border: 1px solid #0284c7;' 
+                            : 'background: white; color: #334155; border: 1px solid #cbd5e1;';
+                        btnHtml += '<button onclick="changeEvalPage(' + p + ')" style="padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; cursor: pointer; ' + style + '">' + p + '</button>';
+                    }}
+
+                    const nextDisabled = currentEvalPage === totalPages ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : '';
+                    btnHtml += '<button onclick="changeEvalPage(' + (currentEvalPage + 1) + ')" ' + nextDisabled + ' style="padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; font-weight: 600; font-size: 0.8rem; cursor: pointer;">Next →</button>';
+
+                    ctrlElem.innerHTML = btnHtml;
+                }}
+            }}
+
             // Live Log Stream Polling Function
             async function fetchLiveLogs() {{
                 try {{
@@ -935,6 +1298,12 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
             setInterval(fetchLiveLogs, 1500);
             fetchLiveLogs();
+            window.addEventListener('DOMContentLoaded', () => {{
+                renderFeedPagination();
+                renderEvalPagination();
+            }});
+            renderFeedPagination();
+            renderEvalPagination();
 
             async function resyncKB(domain) {{
                 alert('Initiating vector re-sync for ' + domain + '...');
@@ -1055,3 +1424,59 @@ def toggle_portal(portal_id: str, db: Session = Depends(get_db)):
     status_str = "ACTIVE (ON)" if portal.is_active else "INACTIVE (OFF)"
     system_logger.add_log("INFO", f"🔄 Portal '{portal.name}' toggled to {status_str}.")
     return {"status": "success", "portal_id": portal.portal_id, "is_active": portal.is_active}
+
+@app.post("/api/v1/evaluations/{rfp_id}/re-evaluate")
+async def re_evaluate_rfp(rfp_id: str, db: Session = Depends(get_db)):
+    rfp = db.query(RFPOpportunity).filter_by(id=rfp_id).first()
+    if not rfp:
+        raise HTTPException(status_code=404, detail="RFP opportunity not found")
+    
+    rfp_data = {
+        "title": rfp.title,
+        "issuing_org": rfp.issuing_org,
+        "country": rfp.country,
+        "source_url": rfp.source_url,
+        "submission_deadline": rfp.submission_deadline,
+        "estimated_value_usd": rfp.estimated_value_usd,
+        "raw_content": rfp.raw_content or rfp.title
+    }
+    
+    reasoner = LLMOpportunityReasoner()
+    system_logger.add_log("INFO", f"[LLMReasoner] Re-evaluating RFP with Groq LLM: '{rfp.title[:40]}'")
+    eval_res = await reasoner.evaluate_rfp(rfp_data)
+    
+    score = eval_res.get("relevance_score", 0)
+    rec = eval_res.get("recommendation", "PASS")
+    
+    existing_eval = db.query(RFPExecutionEvaluation).filter_by(rfp_id=rfp.id).first()
+    if existing_eval:
+        existing_eval.relevance_score = score
+        existing_eval.is_relevant = eval_res.get("is_relevant", False)
+        existing_eval.why_relevant = eval_res.get("why_relevant", "")
+        existing_eval.eai_deliverables = eval_res.get("eai_deliverables", [])
+        existing_eval.missing_requirements = eval_res.get("missing_requirements", [])
+        existing_eval.ai_summary = eval_res.get("ai_summary", "")
+        existing_eval.recommendation = rec
+    else:
+        existing_eval = RFPExecutionEvaluation(
+            rfp_id=rfp.id,
+            relevance_score=score,
+            is_relevant=eval_res.get("is_relevant", False),
+            why_relevant=eval_res.get("why_relevant", ""),
+            eai_deliverables=eval_res.get("eai_deliverables", []),
+            missing_requirements=eval_res.get("missing_requirements", []),
+            ai_summary=eval_res.get("ai_summary", ""),
+            recommendation=rec
+        )
+        db.add(existing_eval)
+    
+    db.commit()
+    system_logger.add_log("SUCCESS", f"[LLMReasoner] Updated evaluation score to {score}% ({rec})")
+    return {
+        "status": "success", 
+        "score": score, 
+        "recommendation": rec,
+        "ai_summary": eval_res.get("ai_summary", ""),
+        "eai_deliverables": eval_res.get("eai_deliverables", []),
+        "missing_requirements": eval_res.get("missing_requirements", [])
+    }

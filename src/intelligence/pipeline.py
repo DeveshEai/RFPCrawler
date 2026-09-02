@@ -58,6 +58,9 @@ class RFPIntelligencePipeline:
         self._ensure_portals_seeded()
         stats = {"scraped": 0, "stage1_passed": 0, "evaluated": 0, "pursued": 0, "emails_sent": 0}
 
+        target_name = target_portal_id if target_portal_id else "Standard Enabled Portals"
+        system_logger.add_log("INFO", f"=== 🚀 Starting Pipeline Crawl Run (Target: {target_name}) ===")
+
         # Retrieve enabled portal IDs from database
         active_portal_ids = {
             p.portal_id for p in self.db.query(ProcurementPortal).filter_by(is_active=True).all()
@@ -67,8 +70,8 @@ class RFPIntelligencePipeline:
         if target_portal_id:
             active_adapters = [a for a in self.adapters if a.portal_id == target_portal_id]
         else:
-            # Standard crawl runs enabled portals only
-            active_adapters = [a for a in self.adapters if a.portal_id in active_portal_ids and a.portal_id != "google_serpapi"]
+            # Standard crawl runs all user-enabled active portals
+            active_adapters = [a for a in self.adapters if a.portal_id in active_portal_ids]
 
         from datetime import datetime
         batch_id = f"batch_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
@@ -101,7 +104,9 @@ class RFPIntelligencePipeline:
                 ).first()
 
                 if existing:
-                    system_logger.add_log("INFO", f"[Pipeline] Skipping duplicate record: '{title[:40]}'")
+                    existing.batch_id = batch_id
+                    self.db.commit()
+                    system_logger.add_log("INFO", f"[Pipeline] Re-verified existing record in current batch: '{title[:40]}'")
                     continue
 
                 # Stage 1: Deterministic hard filter
@@ -163,5 +168,6 @@ class RFPIntelligencePipeline:
                     if sent:
                         stats["emails_sent"] += 1
 
-        system_logger.add_log("SUCCESS", f"[Pipeline] Pipeline run completed. Total Scraped: {stats['scraped']} | Evaluated: {stats['evaluated']} | Pursued: {stats['pursued']}")
+        new_count = stats["scraped"] - stats.get("duplicates", 0)
+        system_logger.add_log("SUCCESS", f"🏁 Pipeline run completed. Scraped: {stats['scraped']} | New: {new_count} | Duplicates: {stats.get('duplicates', 0)} | Evaluated: {stats['evaluated']} | Pursued: {stats['pursued']}")
         return stats
