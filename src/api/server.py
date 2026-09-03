@@ -73,9 +73,9 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
     def render_status_badge(p):
         if p.is_active:
-            return f'''<button type="button" onclick="togglePortal('{p.portal_id}', event)" style="background: #dcfce7; color: #15803d; border: 1px solid #86efac; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">🟢 ACTIVE (ON)</button>'''
+            return f'''<button type="button" onclick="togglePortal('{p.portal_id}', event)" style="background: #dcfce7; color: #15803d; border: 1px solid #86efac; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">ACTIVE (ON)</button>'''
         else:
-            return f'''<button type="button" onclick="togglePortal('{p.portal_id}', event)" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">⚪ INACTIVE (OFF)</button>'''
+            return f'''<button type="button" onclick="togglePortal('{p.portal_id}', event)" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; cursor: pointer;">INACTIVE (OFF)</button>'''
 
     portal_rows = "".join(f"""
         <tr style="border-bottom: 1px solid #e2e8f0;">
@@ -84,8 +84,9 @@ def admin_dashboard(db: Session = Depends(get_db)):
             <td style="padding: 14px 16px;">{render_status_badge(p)}</td>
             <td style="padding: 14px 16px;"><a href="{p.base_url}" target="_blank" style="color: #0284c7; text-decoration: none; font-weight: 500;">{p.base_url}</a></td>
             <td style="padding: 14px 16px;">
-                <button type="button" onclick="triggerLiveScan('{p.portal_id}', event)" style="background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem;">
-                    ▶️ Run Adapter
+                <button type="button" onclick="triggerLiveScan('{p.portal_id}', event)" style="background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Run Adapter
                 </button>
             </td>
         </tr>
@@ -138,7 +139,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
         if not eval_obj:
             badge_bg = "#64748b"
-            badge_text = "🧠 UNASSESSED"
+            badge_text = "UNASSESSED"
         elif rec == "PURSUE" or score >= 70:
             badge_bg = "#0d9488"
             badge_text = f"{score}% PURSUE"
@@ -179,8 +180,9 @@ def admin_dashboard(db: Session = Depends(get_db)):
             AI Brief (12 Qs)
         </button>
         """ if eval_obj else f"""
-        <button class="btn-ai-brief" style="background: #8b5cf6; border: none; color: white;" onclick="evaluateSingleRFP('{r.id}', event)">
-            ⚡ Evaluate with AI
+        <button class="btn-ai-brief" style="background: #8b5cf6; border: none; color: white; display: inline-flex; align-items: center; gap: 6px;" onclick="evaluateSingleRFP('{r.id}', event)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Evaluate with AI
         </button>
         """
 
@@ -727,12 +729,12 @@ def admin_dashboard(db: Session = Depends(get_db)):
                     <h1 class="page-title">Opportunity Feed</h1>
                     <div style="display: flex; gap: 10px;">
                         <button class="btn-trigger" onclick="triggerLiveScan(null)">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                            ▶️ Run Crawlers (Fast Scrape)
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+                            Run Crawlers (Fast Scrape)
                         </button>
                         <button class="btn-trigger" style="background: #8b5cf6;" onclick="triggerEvaluateAllPending()">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/></svg>
-                            🧠 Evaluate Pending RFPs ({count_pending} Pending)
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            Evaluate Pending RFPs ({count_pending} Pending)
                         </button>
                         <button class="btn-trigger" style="background: #ef4444;" onclick="cancelActiveCrawl()">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
@@ -757,17 +759,21 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
                 <!-- Sub-tabs for Latest Run vs Archive -->
                 <div class="sub-tab-bar" style="display: flex; gap: 10px; margin: 20px 0 16px 0;">
-                    <button class="sub-tab-btn active" onclick="filterFeed('latest', this)">
-                        ⚡ Latest Crawl Run ({count_latest})
+                    <button class="sub-tab-btn active" onclick="filterFeed('latest', this)" style="display: inline-flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        Latest Crawl Run ({count_latest})
                     </button>
-                    <button class="sub-tab-btn" onclick="filterFeed('pending', this)" style="border: 1px solid #c084fc; color: #7e22ce;">
-                        🧠 Pending AI Evaluation ({count_pending})
+                    <button class="sub-tab-btn" onclick="filterFeed('pending', this)" style="border: 1px solid #c084fc; color: #7e22ce; display: inline-flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Pending AI Evaluation ({count_pending})
                     </button>
-                    <button class="sub-tab-btn" onclick="filterFeed('archive', this)">
-                        📚 Historical Archive ({count_archive})
+                    <button class="sub-tab-btn" onclick="filterFeed('archive', this)" style="display: inline-flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                        Historical Archive ({count_archive})
                     </button>
-                    <button class="sub-tab-btn" onclick="filterFeed('all', this)">
-                        🌐 All Opportunities ({len(rfps)})
+                    <button class="sub-tab-btn" onclick="filterFeed('all', this)" style="display: inline-flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        All Opportunities ({len(rfps)})
                     </button>
                 </div>
 
@@ -878,13 +884,13 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 <!-- Evaluation Filter Controls -->
                 <div style="background: white; padding: 16px 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 24px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                     <div style="display: flex; flex-wrap: wrap; gap: 12px; flex: 1; align-items: center;">
-                        <input type="text" id="evalSearchFilter" onkeyup="filterEvaluations()" placeholder="🔍 Search RFP title, authority, deliverables..." style="padding: 9px 14px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.88rem; min-width: 260px; flex: 1;">
+                        <input type="text" id="evalSearchFilter" onkeyup="filterEvaluations()" placeholder="Search RFP title, authority, deliverables..." style="padding: 9px 14px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.88rem; min-width: 260px; flex: 1;">
                         
                         <select id="evalRecFilter" onchange="filterEvaluations()" style="padding: 9px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.85rem; font-weight: 500; background: white; color: #334155; cursor: pointer;">
                             <option value="all">All Recommendations</option>
-                            <option value="PURSUE">⚡ PURSUE Only</option>
-                            <option value="PARTNER">🤝 PARTNER Only</option>
-                            <option value="REVIEW">🔍 REVIEW Only</option>
+                            <option value="PURSUE">PURSUE Only</option>
+                            <option value="PARTNER">PARTNER Only</option>
+                            <option value="REVIEW">REVIEW Only</option>
                         </select>
 
                         <select id="evalScoreFilter" onchange="filterEvaluations()" style="padding: 9px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.85rem; font-weight: 500; background: white; color: #334155; cursor: pointer;">
@@ -1407,11 +1413,11 @@ def admin_dashboard(db: Session = Depends(get_db)):
             }}
 
             async function triggerEvaluateAllPending() {{
-                appendConsoleLog('INFO', '🧠 Triggering Groq LLM evaluation for all unassessed RFPs...');
+                appendConsoleLog('INFO', 'Triggering Groq LLM evaluation for all unassessed RFPs...');
                 try {{
                     const res = await fetch('/api/v1/evaluations/evaluate-all', {{ method: 'POST' }});
                     const data = await res.json();
-                    appendConsoleLog('SUCCESS', '🏁 Batch evaluation complete! Evaluated: ' + (data.stats ? data.stats.evaluated : 0));
+                    appendConsoleLog('SUCCESS', 'Batch evaluation complete. Evaluated: ' + (data.stats ? data.stats.evaluated : 0));
                     window.location.reload();
                 }} catch (e) {{
                     appendConsoleLog('ERROR', 'Batch evaluation error: ' + e);
@@ -1420,11 +1426,11 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
             async function evaluateSingleRFP(rfpId, ev) {{
                 if (ev && ev.preventDefault) ev.preventDefault();
-                appendConsoleLog('INFO', '⚡ Running AI evaluation for RFP #' + rfpId + '...');
+                appendConsoleLog('INFO', 'Running AI evaluation for RFP #' + rfpId + '...');
                 try {{
                     const res = await fetch('/api/v1/evaluations/' + encodeURIComponent(rfpId) + '/re-evaluate', {{ method: 'POST' }});
                     const data = await res.json();
-                    appendConsoleLog('SUCCESS', '✅ Evaluation completed for RFP #' + rfpId);
+                    appendConsoleLog('SUCCESS', 'Evaluation completed for RFP #' + rfpId);
                     window.location.reload();
                 }} catch (e) {{
                     appendConsoleLog('ERROR', 'Single evaluation error: ' + e);
