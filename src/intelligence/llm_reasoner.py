@@ -93,6 +93,28 @@ class LLMOpportunityReasoner:
                         content = resp.json()["choices"][0]["message"]["content"]
                         parsed = json.loads(content)
                         return parsed
+                    elif resp.status_code == 429:
+                        system_logger.add_log("ERROR", "🛑 [LLMReasoner] Groq API Token / Rate Limit Exhausted! (HTTP 429 - Rate limit reached). Skipping heuristic false score.")
+                        return {
+                            "relevance_score": 0,
+                            "is_relevant": False,
+                            "why_relevant": "Groq LLM evaluation paused: API Token / Rate Limit Exhausted (HTTP 429).",
+                            "eai_deliverables": [],
+                            "missing_requirements": ["Requires Groq API Token quota reset"],
+                            "ai_summary": "⚠️ Evaluation incomplete: Groq API Token Limit / Quota Exhausted (HTTP 429). Please retry once quota resets.",
+                            "recommendation": "PASS"
+                        }
+                    elif resp.status_code in [401, 403]:
+                        system_logger.add_log("ERROR", f"🛑 [LLMReasoner] Groq API Authorization Error (HTTP {resp.status_code}). Invalid or expired API key.")
+                        return {
+                            "relevance_score": 0,
+                            "is_relevant": False,
+                            "why_relevant": f"Groq API Authorization Error (HTTP {resp.status_code}). Please check GROQ_API_KEY.",
+                            "eai_deliverables": [],
+                            "missing_requirements": ["Invalid API Key"],
+                            "ai_summary": f"⚠️ Evaluation failed: Groq API Authorization Error (HTTP {resp.status_code}).",
+                            "recommendation": "PASS"
+                        }
                     else:
                         system_logger.add_log("WARN", f"[LLMReasoner] Groq API HTTP {resp.status_code}, falling back to deterministic heuristic evaluation.")
             except Exception as e:
@@ -100,9 +122,9 @@ class LLMOpportunityReasoner:
 
         # Deterministic Heuristic Fallback
         system_logger.add_log("INFO", f"[LLMReasoner] Applying eaisystems.com & phantomops.ae heuristic matcher...")
-        score = 50
-        recommendation = "REVIEW"
-        why = "Opportunity matches digital transformation and software integration scope."
+        score = 40
+        recommendation = "PASS"
+        why = "Generic procurement item outside primary target criteria."
         deliverables = ["Digital Process Automation", "API Integration Services"]
         missing = ["Detailed technical specification review required"]
 
@@ -113,18 +135,18 @@ class LLMOpportunityReasoner:
             deliverables = ["Pega Low-Code DPA Implementation", "Case Management Architecture", "Decisioning & Workflow Automation"]
             missing = ["Local UK onshore resource allocation confirmation"]
 
-        elif any(k in combined_text for k in ["ai ", "artificial intelligence", "automation", "agent", "robot", "rpa"]):
+        elif any(k in combined_text for k in ["sovereign ai", "arabic ai", "agentic ai", "phantomops"]):
             score = 85
             recommendation = "PURSUE"
             why = "Direct alignment with PhantomOps Sovereign Agentic AI Workforce platform (phantomops.ae)."
             deliverables = ["PhantomOps Sovereign AI Agents", "Automated Workflow Bots", "NLP & Intelligent Document Processing"]
             missing = ["Private cloud air-gapped hosting requirements check"]
 
-        elif any(k in combined_text for k in ["software", "cyber", "security", "cloud", "data"]):
-            score = 75
-            recommendation = "PURSUE"
-            why = "Matches EAI Systems' core Enterprise Application Integration & Cloud Infrastructure domain (eaisystems.com)."
-            deliverables = ["Enterprise Integration Services", "Microservices & Cloud API Architecture", "Cybersecurity Governance"]
+        elif any(k in combined_text for k in ["software", "cyber", "security", "cloud", "data", "automation"]):
+            score = 55
+            recommendation = "REVIEW"
+            why = "Matches general EAI Systems domain but requires technical specification review (eaisystems.com)."
+            deliverables = ["Enterprise Integration Services", "Microservices & Cloud API Architecture"]
 
         return {
             "relevance_score": score,
