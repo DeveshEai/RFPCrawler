@@ -25,3 +25,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Documentation
+RFPCrawler_v2_Documentation.docx
