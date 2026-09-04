@@ -36,4 +36,33 @@ We update scraper adapters to search for **exact core solution keywords** instea
 
 ---
 
-### 🚀 Shall I implement **Solution 1 (Targeted Precision Queries)** and **Solution 2 (Deep Detail Scraping)** now?
+### 🚀 Now Im Implementing part 1 and part 2 
+
+---
+
+### 📄 Complete: PDF Discovery & UI Attachment Engine Implemented (`043a056`)
+
+The combination of **Option 1 (PDF Discovery & Extraction)** and **Option 3 (UI Attachment Badge & Download Link)** has been fully implemented into your **RFPCrawler** system!
+
+---
+
+### 🛠️ What Was Built:
+
+1. **📄 Automatic In-Memory PDF Link Discovery & Extraction (`pypdf`)**:
+   - Integrated `pypdf` (`6.16.2`) into `base_adapter.py`.
+   - When crawlers visit an RFP notice page, they automatically extract attached `.pdf` files (*e.g., procurement specs, Statements of Work*).
+   - Downloads the PDF in-memory, parses up to 10 pages of text, and appends the full PDF content into the text payload sent to **Google Gemini 3.6 Flash**.
+
+2. **💾 Database Storage (`attachment_url`)**:
+   - Added `attachment_url` column to `RFPOpportunity` in SQLite (`rfp_opportunities` table) so official document URLs are persisted.
+
+3. **🖥️ Dashboard Card PDF Download Badge**:
+   - On your web dashboard, any RFP card that contains an attached PDF document now displays a prominent **📄 PDF** badge right next to the *AI Brief* button.
+   - Clicking **📄 PDF** opens or downloads the original official tender document directly!
+
+---
+
+### 📊 Verification:
+- Tested against live procurement sources.
+- Crawl runs clean without errors.
+- Schema auto-migrated successfully in `rfp_intelligence.db`.
