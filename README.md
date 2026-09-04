@@ -9,35 +9,35 @@
 ### 1. Opportunity Feed & Real-Time Pipeline Stream
 The main dashboard presents live procurement opportunities scraped across global portals, featuring real-time LLM reasoning event stream logs, PURSUE/REVIEW match tags, and fast scraping controls.
 
-![Opportunity Feed](docs/images/opportunity_feed.png)
+![Opportunity Feed](docs/images/opportunity_feed_v2.png)
 
 ---
 
 ### 2. 12-Question Executive AI Brief Modal
 Clicking **`📄 AI Brief (12 Qs)`** on any tender card opens an executive briefing dossier outlining issuing authority, estimated contract value, executive alignment summary, practice deliverables, and missing requirement gaps.
 
-![Executive AI Brief Modal](docs/images/executive_ai_brief.png)
+![Executive AI Brief Modal](docs/images/executive_ai_brief_v2.png)
 
 ---
 
 ### 3. Company Grounding Knowledge Base
 Grounding domain knowledge store indexed for **EAI Systems** (`eaisystems.com`) and **PhantomOps** (`phantomops.ae`) with 1-click domain vector re-sync capability.
 
-![Knowledge Base Grounding](docs/images/knowledge_base.png)
+![Knowledge Base Grounding](docs/images/knowledge_base_v2.png)
 
 ---
 
 ### 4. Configured Portal Adapters
 Multi-portal scraping control panel supporting UK Contracts Finder, Find a Tender, SAM.gov, Google Serper, SerpApi, DuckDuckGo, and Craxy AI.
 
-![Portal Adapters](docs/images/portal_adapters.png)
+![Portal Adapters](docs/images/portal_adapters_v2.png)
 
 ---
 
 ### 5. Deep AI Opportunity Evaluations
 Dedicated analysis workspace with score filters (`PURSUE Only`, `Match Score >= 70%`), matched practice deliverables, missing gap tags, and 1-click re-evaluations.
 
-![AI Opportunity Evaluations](docs/images/ai_evaluations.png)
+![AI Opportunity Evaluations](docs/images/ai_evaluations_v2.png)
 
 ---
 
