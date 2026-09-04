@@ -5,7 +5,7 @@ import random
 from typing import List, Dict, Any
 from duckduckgo_search import DDGS
 import httpx
-from src.sources.base_adapter import BasePortalAdapter, fetch_deep_page_content
+from src.sources.base_adapter import BasePortalAdapter, fetch_deep_page_content, is_valid_rfp_notice
 from src.services.logger_service import system_logger
 
 class DuckDuckGoFreeAdapter(BasePortalAdapter):
@@ -75,6 +75,11 @@ class DuckDuckGoFreeAdapter(BasePortalAdapter):
 
                     lower_title = title.lower()
                     if "search results" in lower_title or "search page" in lower_title or lower_title == "find a tender":
+                        continue
+
+                    # Reject blogs, glossaries, top lists & software tools
+                    if not is_valid_rfp_notice(title, href):
+                        system_logger.add_log("INFO", f"[DuckDuckGoFreeAdapter] Excluded blog/article noise: '{title[:45]}'")
                         continue
 
                     link_hash = hashlib.md5(href.encode('utf-8')).hexdigest()[:12]

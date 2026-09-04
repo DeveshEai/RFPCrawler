@@ -4,7 +4,7 @@ import re
 import hashlib
 import random
 from typing import List, Dict, Any
-from src.sources.base_adapter import BasePortalAdapter, fetch_deep_page_content
+from src.sources.base_adapter import BasePortalAdapter, fetch_deep_page_content, is_valid_rfp_notice
 from src.services.logger_service import system_logger
 from config import settings
 
@@ -39,14 +39,14 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
             system_logger.add_log("WARN", "[SerpApiGoogleAdapter] SERPAPI_KEY not configured in .env. Skipping Google search crawl.")
             return results
 
-        # Precise, high-yield enterprise procurement queries
+        # Strict dork queries targeting real contract notices and excluding blog/article noise
         queries = [
-            '"Pega" AND ("RFP" OR "Tender" OR "Procurement")',
-            '"Business Process Automation" AND ("Contract Notice" OR "Tender")',
-            '"Sovereign AI" OR "Arabic LLM" OR "Agentic AI" AND ("RFP" OR "Procurement")',
-            '"Microservices Integration" OR "MuleSoft" AND ("Tender" OR "RFP")',
-            '"Case Management System" AND ("Contract Notice" OR "Procurement")',
-            '"Workflow Automation" AND ("Tender Notice" OR "RFP")'
+            'intitle:"Contract Notice" "Pega" OR "BPM" site:service.gov.uk -"blog" -"tools"',
+            'intitle:"Tender" "Sovereign AI" OR "Arabic AI" OR "Agentic" site:gov.ae -"blog"',
+            'intitle:"Solicitation" "Microservices" OR "Integration Platform" site:sam.gov -"blog"',
+            '"Request for Proposal" "Case Management" site:gov.uk -"blog" -"what is"',
+            'intitle:"RFP" "MuleSoft" OR "API Gateway" site:service.gov.uk -"blog"',
+            'intitle:"Tender Notice" "Workflow Automation" site:gov.uk -"blog" -"best"'
         ]
 
         selected_queries = random.sample(queries, min(3, len(queries)))
@@ -87,6 +87,11 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
 
                         lower_title = title.lower()
                         if "search results" in lower_title or "search page" in lower_title or lower_title == "find a tender":
+                            continue
+
+                        # Reject blogs, glossaries, top lists & software tools
+                        if not is_valid_rfp_notice(title, link):
+                            system_logger.add_log("INFO", f"[SerpApiGoogleAdapter] Excluded blog/article noise: '{title[:45]}'")
                             continue
 
                         link_hash = hashlib.md5(link.encode('utf-8')).hexdigest()[:12]
