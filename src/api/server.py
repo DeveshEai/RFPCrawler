@@ -44,7 +44,7 @@ async def resync_knowledge_base(domain: str = Query(...)):
     system_logger.add_log("INFO", f"[KnowledgeBase] Initiating live re-indexing scan for domain '{domain}'...")
     url = f"https://{domain}" if not domain.startswith("http") else domain
     try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, verify=False) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
                 system_logger.add_log("SUCCESS", f"[KnowledgeBase] Successfully connected to {url} (HTTP 200). Indexing 36 capability vectors into grounding store.")
