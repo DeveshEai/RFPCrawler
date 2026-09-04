@@ -130,27 +130,29 @@ class LLMOpportunityReasoner:
                         parsed = json.loads(content)
                         return parsed
                     elif resp.status_code == 429:
-                        system_logger.add_log("WARN", "⚠️ [LLMReasoner] Groq API Token / Rate Limit Exhausted (HTTP 429). Initiating failover to Google Gemini 3.6 Flash...")
-                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
-                        if gemini_res:
-                            return gemini_res
-                    elif resp.status_code in [401, 403]:
-                        system_logger.add_log("WARN", f"⚠️ [LLMReasoner] Groq API Authorization Error (HTTP {resp.status_code}). Initiating failover to Google Gemini 3.6 Flash...")
-                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
-                        if gemini_res:
-                            return gemini_res
+                        system_logger.add_log("WARN", "⚠️ [LLMReasoner] Groq API Rate Limit (HTTP 429). Attempting Gemini failover...")
+                        try:
+                            gemini_res = await self.evaluate_with_gemini(title, raw_content)
+                            if gemini_res:
+                                return gemini_res
+                        except QuotaExceededException:
+                            system_logger.add_log("WARN", "[LLMReasoner] Gemini quota also exhausted. Applying EAI heuristic domain matcher.")
                     else:
                         system_logger.add_log("WARN", f"[LLMReasoner] Groq API HTTP {resp.status_code}, attempting Gemini failover...")
-                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
-                        if gemini_res:
-                            return gemini_res
+                        try:
+                            gemini_res = await self.evaluate_with_gemini(title, raw_content)
+                            if gemini_res:
+                                return gemini_res
+                        except QuotaExceededException:
+                            pass
             except Exception as e:
                 system_logger.add_log("ERROR", f"[LLMReasoner] Groq API error: {e}")
 
-        # Try Google Gemini if configured or as failover
-        gemini_res = await self.evaluate_with_gemini(title, raw_content)
-        if gemini_res:
-            return gemini_res
+        # Try Google Gemini if configured as primary provider
+        if settings.LLM_PROVIDER == "gemini":
+            gemini_res = await self.evaluate_with_gemini(title, raw_content)
+            if gemini_res:
+                return gemini_res
 
         # Deterministic Heuristic Fallback
         system_logger.add_log("INFO", f"[LLMReasoner] Applying eaisystems.com & phantomops.ae heuristic matcher...")

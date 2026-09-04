@@ -59,14 +59,26 @@ async def extract_pdf_text_from_url(client: httpx.AsyncClient, pdf_url: str, max
     return ""
 
 def find_pdf_links_in_html(soup: BeautifulSoup, page_url: str) -> List[str]:
-    """Finds all downloadable PDF attachment URLs within a notice webpage."""
+    """Finds all downloadable PDF attachment and specification document URLs within a notice webpage."""
     pdf_links = []
     for a in soup.find_all("a", href=True):
         href = a["href"].strip()
-        if href.lower().endswith(".pdf") or ".pdf?" in href.lower():
+        lower_href = href.lower()
+        
+        # Match explicit .pdf or common tender document download endpoints
+        is_doc = (
+            lower_href.endswith(".pdf") or 
+            ".pdf?" in lower_href or 
+            "/attachment/" in lower_href or 
+            "/download" in lower_href or
+            "resources/files" in lower_href or
+            "tender_document" in lower_href or
+            "notice/attachment" in lower_href
+        )
+
+        if is_doc and not lower_href.startswith("javascript:") and not lower_href.startswith("#"):
             if not href.startswith("http"):
                 if href.startswith("/"):
-                    # Use origin domain
                     match = re.match(r'(https?://[^/]+)', page_url)
                     base_domain = match.group(1) if match else page_url
                     href = base_domain + href
