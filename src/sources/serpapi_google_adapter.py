@@ -4,7 +4,7 @@ import re
 import hashlib
 import random
 from typing import List, Dict, Any
-from src.sources.base_adapter import BasePortalAdapter
+from src.sources.base_adapter import BasePortalAdapter, fetch_deep_page_content
 from src.services.logger_service import system_logger
 from config import settings
 
@@ -39,27 +39,25 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
             system_logger.add_log("WARN", "[SerpApiGoogleAdapter] SERPAPI_KEY not configured in .env. Skipping Google search crawl.")
             return results
 
-        # Precise Google Dorks targeting specific contract notice pages
+        # Precise, high-yield enterprise procurement queries
         queries = [
-            'intitle:"Contract Notice" "AI" OR "Software" site:service.gov.uk',
-            'intitle:"Tender" "Digital Transformation" OR "Automation" site:gov.uk',
-            'intitle:"Solicitation" "Artificial Intelligence" OR "Cloud" site:sam.gov',
-            '"Request for Proposal" "Cyber Security" OR "Software" site:gov.uk',
-            'intitle:"RFP" "Workflow" OR "Pega" site:service.gov.uk',
-            'intitle:"Tender Notice" "Data Platform" OR "Machine Learning" site:gov.uk'
+            '"Pega" AND ("RFP" OR "Tender" OR "Procurement")',
+            '"Business Process Automation" AND ("Contract Notice" OR "Tender")',
+            '"Sovereign AI" OR "Arabic LLM" OR "Agentic AI" AND ("RFP" OR "Procurement")',
+            '"Microservices Integration" OR "MuleSoft" AND ("Tender" OR "RFP")',
+            '"Case Management System" AND ("Contract Notice" OR "Procurement")',
+            '"Workflow Automation" AND ("Tender Notice" OR "RFP")'
         ]
 
-        # Pick 3 queries per run to vary results
         selected_queries = random.sample(queries, min(3, len(queries)))
 
-        async with httpx.AsyncClient(timeout=25.0) as client:
+        async with httpx.AsyncClient(timeout=25.0, follow_redirects=True) as client:
             for q in selected_queries:
                 try:
                     system_logger.add_log("INFO", f"[SerpApiGoogleAdapter] Querying Google SerpAPI: '{q[:60]}...'")
                     params = {
                         "engine": "google",
                         "q": q,
-                        "tbs": "qdr:m",  # Past month to fetch recent live opportunities
                         "api_key": api_key
                     }
                     resp = await client.get(f"{self.base_url}/search.json", params=params)
@@ -87,12 +85,15 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
                         if not title or not link:
                             continue
 
-                        # Filter out generic search result aggregator landing pages
                         lower_title = title.lower()
                         if "search results" in lower_title or "search page" in lower_title or lower_title == "find a tender":
                             continue
 
                         link_hash = hashlib.md5(link.encode('utf-8')).hexdigest()[:12]
+
+                        deep_body = await fetch_deep_page_content(client, link, max_chars=2500)
+                        full_content = deep_body if len(deep_body) > 200 else snippet
+
                         results.append({
                             "external_rfp_id": f"google_serpapi_{link_hash}",
                             "title": title,
@@ -102,7 +103,7 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
                             "currency": "USD",
                             "submission_deadline": "See Source Notice",
                             "source_url": link,
-                            "raw_content": f"{title}\n\n{snippet}",
+                            "raw_content": f"{title}. {full_content}",
                             "portal_id": self.portal_id
                         })
 
