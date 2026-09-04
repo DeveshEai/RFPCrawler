@@ -16,7 +16,7 @@ The main dashboard presents live procurement opportunities scraped across global
 ### 2. 12-Question Executive AI Brief Modal
 Clicking **`📄 AI Brief (12 Qs)`** on any tender card opens an executive briefing dossier outlining issuing authority, estimated contract value, executive alignment summary, practice deliverables, and missing requirement gaps.
 
-![Executive AI Brief Modal](docs/images/executive_ai_brief_v4.png)
+![Executive AI Brief Modal](docs/images/executive_ai_brief_v2.png)
 
 ---
 
