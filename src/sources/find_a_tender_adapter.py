@@ -134,7 +134,7 @@ class FindATenderAdapter(BasePortalAdapter):
                     if len(results) >= max_items:
                         break
 
-                    deep_body = await fetch_deep_page_content(client, item["url"], max_chars=3000)
+                    deep_body, pdf_url = await fetch_deep_page_content(client, item["url"], max_chars=3000)
                     full_content = deep_body if len(deep_body) > 200 else item["raw_text"]
 
                     results.append({
@@ -147,6 +147,7 @@ class FindATenderAdapter(BasePortalAdapter):
                         "submission_deadline": item["closing"],
                         "source_url": item["url"],
                         "raw_content": f"{item['title']}. {full_content}",
+                        "attachment_url": pdf_url or None,
                         "portal_id": self.portal_id
                     })
 

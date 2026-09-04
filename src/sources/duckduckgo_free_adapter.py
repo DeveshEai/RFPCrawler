@@ -85,7 +85,7 @@ class DuckDuckGoFreeAdapter(BasePortalAdapter):
                     link_hash = hashlib.md5(href.encode('utf-8')).hexdigest()[:12]
                     clean_title = re.sub(r'<[^>]+>', '', title)
 
-                    deep_body = await fetch_deep_page_content(client, href, max_chars=2500)
+                    deep_body, pdf_url = await fetch_deep_page_content(client, href, max_chars=2500)
                     full_text = deep_body if len(deep_body) > 200 else snippet
 
                     results.append({
@@ -97,7 +97,8 @@ class DuckDuckGoFreeAdapter(BasePortalAdapter):
                         "source_url": href,
                         "submission_deadline": "Check Notice Details",
                         "estimated_value_usd": 0.0,
-                        "raw_content": f"{clean_title}. {full_text}"
+                        "raw_content": f"{clean_title}. {full_text}",
+                        "attachment_url": pdf_url or None
                     })
 
         system_logger.add_log("SUCCESS", f"[DuckDuckGoFreeAdapter] Free search crawl complete. Scraped {len(results)} opportunities.")

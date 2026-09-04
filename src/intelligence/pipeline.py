@@ -134,6 +134,7 @@ class RFPIntelligencePipeline:
                     submission_deadline=rfp_data.get("submission_deadline"),
                     estimated_value_usd=rfp_data.get("estimated_value_usd", 0.0),
                     raw_content=rfp_data.get("raw_content", ""),
+                    attachment_url=rfp_data.get("attachment_url"),
                     batch_id=batch_id
                 )
                 self.db.add(rfp_obj)

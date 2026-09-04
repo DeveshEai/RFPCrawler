@@ -96,7 +96,7 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
 
                         link_hash = hashlib.md5(link.encode('utf-8')).hexdigest()[:12]
 
-                        deep_body = await fetch_deep_page_content(client, link, max_chars=2500)
+                        deep_body, pdf_url = await fetch_deep_page_content(client, link, max_chars=2500)
                         full_content = deep_body if len(deep_body) > 200 else snippet
 
                         results.append({
@@ -109,6 +109,7 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
                             "submission_deadline": "See Source Notice",
                             "source_url": link,
                             "raw_content": f"{title}. {full_content}",
+                            "attachment_url": pdf_url or None,
                             "portal_id": self.portal_id
                         })
 

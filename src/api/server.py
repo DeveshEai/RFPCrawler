@@ -19,7 +19,13 @@ with engine.connect() as conn:
         conn.execute(text("ALTER TABLE rfp_opportunities ADD COLUMN batch_id VARCHAR(50);"))
         conn.commit()
     except Exception:
-        pass  # Column already exists
+        pass
+    try:
+        from sqlalchemy import text
+        conn.execute(text("ALTER TABLE rfp_opportunities ADD COLUMN attachment_url TEXT;"))
+        conn.commit()
+    except Exception:
+        pass
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -186,6 +192,8 @@ def admin_dashboard(db: Session = Depends(get_db)):
         </button>
         """
 
+        pdf_btn = f'''<a href="{r.attachment_url}" target="_blank" style="background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 6px 10px; border-radius: 8px; font-size: 0.78rem; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="Download Attached PDF Tender Document">📄 PDF</a>''' if getattr(r, 'attachment_url', None) else ""
+
         rfp_cards += f"""
         <div class="opportunity-card {card_class}">
             <div class="card-header">
@@ -218,6 +226,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
             <div class="card-actions">
                 {brief_action_btn}
+                {pdf_btn}
                 <a href="{r.source_url}" target="_blank" class="btn-ext-link" title="Open Original Notice Page">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                 </a>
