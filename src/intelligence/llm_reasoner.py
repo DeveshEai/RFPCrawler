@@ -42,6 +42,10 @@ You MUST respond strictly in valid JSON with this exact structure:
 }}
 """
 
+class QuotaExceededException(Exception):
+    """Raised when an LLM provider (Gemini or Groq) returns HTTP 429 Quota Exceeded / Rate Limit."""
+    pass
+
 class LLMOpportunityReasoner:
     def __init__(self):
         self.api_key = settings.GROQ_API_KEY
@@ -68,8 +72,13 @@ class LLMOpportunityReasoner:
                     text_content = data["candidates"][0]["content"]["parts"][0]["text"]
                     parsed = json.loads(text_content)
                     return parsed
+                elif resp.status_code == 429 or "quota" in resp.text.lower() or "RESOURCE_EXHAUSTED" in resp.text:
+                    system_logger.add_log("ERROR", "🛑 [LLMReasoner] Gemini API Quota Exceeded (HTTP 429 / Quota Exhausted)! Halting evaluations immediately.")
+                    raise QuotaExceededException("Google Gemini API Quota / Rate Limit Exceeded (HTTP 429). Please verify API key plan.")
                 else:
                     system_logger.add_log("WARN", f"[LLMReasoner] Gemini API returned HTTP {resp.status_code}: {resp.text[:150]}")
+        except QuotaExceededException:
+            raise
         except Exception as e:
             system_logger.add_log("ERROR", f"[LLMReasoner] Gemini API exception: {e}")
         return None

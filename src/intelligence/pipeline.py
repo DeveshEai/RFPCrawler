@@ -9,7 +9,7 @@ from src.sources.serpapi_google_adapter import SerpApiGoogleAdapter
 from src.sources.duckduckgo_free_adapter import DuckDuckGoFreeAdapter
 from src.sources.craxy_ai_adapter import CraxyAIAdapter
 from src.intelligence.stage1_filter import Stage1DeterministicFilter
-from src.intelligence.llm_reasoner import LLMOpportunityReasoner
+from src.intelligence.llm_reasoner import LLMOpportunityReasoner, QuotaExceededException
 from src.services.email_service import EmailAlertService
 from src.services.logger_service import system_logger
 
@@ -142,34 +142,38 @@ class RFPIntelligencePipeline:
                 system_logger.add_log("SUCCESS", f"[Stage1Filter] Saved opportunity: '{rfp_data['title'][:45]}' (Ready for AI Evaluation)")
 
                 if auto_evaluate:
-                    system_logger.add_log("INFO", f"[LLMReasoner] Evaluating alignment for RFP: '{rfp_data['title'][:40]}'")
-                    eval_res = await self.reasoner.evaluate_rfp(rfp_data)
-                    stats["evaluated"] += 1
+                    try:
+                        system_logger.add_log("INFO", f"[LLMReasoner] Evaluating alignment for RFP: '{rfp_data['title'][:40]}'")
+                        eval_res = await self.reasoner.evaluate_rfp(rfp_data)
+                        stats["evaluated"] += 1
 
-                    score = eval_res.get("relevance_score", 0)
-                    rec = eval_res.get("recommendation", "PASS")
-                    system_logger.add_log("SUCCESS", f"[LLMReasoner] Score: {score}% ({rec}) for '{rfp_data['title'][:40]}'")
+                        score = eval_res.get("relevance_score", 0)
+                        rec = eval_res.get("recommendation", "PASS")
+                        system_logger.add_log("SUCCESS", f"[LLMReasoner] Score: {score}% ({rec}) for '{rfp_data['title'][:40]}'")
 
-                    eval_obj = RFPExecutionEvaluation(
-                        rfp_id=rfp_obj.id,
-                        relevance_score=score,
-                        is_relevant=eval_res.get("is_relevant", False),
-                        why_relevant=eval_res.get("why_relevant", ""),
-                        eai_deliverables=eval_res.get("eai_deliverables", []),
-                        missing_requirements=eval_res.get("missing_requirements", []),
-                        ai_summary=eval_res.get("ai_summary", ""),
-                        recommendation=rec
-                    )
-                    self.db.add(eval_obj)
-                    self.db.commit()
+                        eval_obj = RFPExecutionEvaluation(
+                            rfp_id=rfp_obj.id,
+                            relevance_score=score,
+                            is_relevant=eval_res.get("is_relevant", False),
+                            why_relevant=eval_res.get("why_relevant", ""),
+                            eai_deliverables=eval_res.get("eai_deliverables", []),
+                            missing_requirements=eval_res.get("missing_requirements", []),
+                            ai_summary=eval_res.get("ai_summary", ""),
+                            recommendation=rec
+                        )
+                        self.db.add(eval_obj)
+                        self.db.commit()
 
-                    if rec == "PURSUE":
-                        stats["pursued"] += 1
+                        if rec == "PURSUE":
+                            stats["pursued"] += 1
 
-                    if eval_res.get("is_relevant"):
-                        sent = self.email_service.send_opportunity_alert(rfp_data, eval_res)
-                        if sent:
-                            stats["emails_sent"] += 1
+                        if eval_res.get("is_relevant"):
+                            sent = self.email_service.send_opportunity_alert(rfp_data, eval_res)
+                            if sent:
+                                stats["emails_sent"] += 1
+                    except QuotaExceededException as qe:
+                        system_logger.add_log("ERROR", f"🛑 [AutoEval] Halting AI evaluation: {qe}")
+                        auto_evaluate = False
 
         system_logger.add_log("SUCCESS", f"🏁 Fast Crawl completed! Scraped: {stats['scraped']} | Saved to DB: {stats['stage1_passed']} (Click '🧠 Evaluate' to analyze with AI)")
         return stats
@@ -210,33 +214,38 @@ class RFPIntelligencePipeline:
                 "raw_content": rfp.raw_content or rfp.title
             }
 
-            system_logger.add_log("INFO", f"[LLMReasoner] Evaluating: '{rfp.title[:40]}'")
-            eval_res = await self.reasoner.evaluate_rfp(rfp_data)
-            stats["evaluated"] += 1
+            try:
+                system_logger.add_log("INFO", f"[LLMReasoner] Evaluating: '{rfp.title[:40]}'")
+                eval_res = await self.reasoner.evaluate_rfp(rfp_data)
+                stats["evaluated"] += 1
 
-            score = eval_res.get("relevance_score", 0)
-            rec = eval_res.get("recommendation", "PASS")
-            system_logger.add_log("SUCCESS", f"[LLMReasoner] Score: {score}% ({rec}) for '{rfp.title[:40]}'")
+                score = eval_res.get("relevance_score", 0)
+                rec = eval_res.get("recommendation", "PASS")
+                system_logger.add_log("SUCCESS", f"[LLMReasoner] Score: {score}% ({rec}) for '{rfp.title[:40]}'")
 
-            eval_obj = RFPExecutionEvaluation(
-                rfp_id=rfp.id,
-                relevance_score=score,
-                is_relevant=eval_res.get("is_relevant", False),
-                why_relevant=eval_res.get("why_relevant", ""),
-                eai_deliverables=eval_res.get("eai_deliverables", []),
-                missing_requirements=eval_res.get("missing_requirements", []),
-                ai_summary=eval_res.get("ai_summary", ""),
-                recommendation=rec
-            )
-            self.db.add(eval_obj)
-            self.db.commit()
+                eval_obj = RFPExecutionEvaluation(
+                    rfp_id=rfp.id,
+                    relevance_score=score,
+                    is_relevant=eval_res.get("is_relevant", False),
+                    why_relevant=eval_res.get("why_relevant", ""),
+                    eai_deliverables=eval_res.get("eai_deliverables", []),
+                    missing_requirements=eval_res.get("missing_requirements", []),
+                    ai_summary=eval_res.get("ai_summary", ""),
+                    recommendation=rec
+                )
+                self.db.add(eval_obj)
+                self.db.commit()
 
-            if rec == "PURSUE":
-                stats["pursued"] += 1
+                if rec == "PURSUE":
+                    stats["pursued"] += 1
 
-            if eval_res.get("is_relevant"):
-                self.email_service.send_opportunity_alert(rfp_data, eval_res)
-                stats["emails_sent"] += 1
+                if eval_res.get("is_relevant"):
+                    self.email_service.send_opportunity_alert(rfp_data, eval_res)
+                    stats["emails_sent"] += 1
+            except QuotaExceededException as qe:
+                system_logger.add_log("ERROR", f"🛑 [BatchEval] API Quota Exhausted! Halting evaluation batch immediately: {qe}")
+                stats["quota_error"] = str(qe)
+                break
 
         system_logger.add_log("SUCCESS", f"🏁 Batch AI Evaluation Completed! Evaluated: {stats['evaluated']} | Pursued: {stats['pursued']}")
         return stats
