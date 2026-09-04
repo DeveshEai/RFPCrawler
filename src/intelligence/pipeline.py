@@ -244,7 +244,7 @@ class RFPIntelligencePipeline:
                     stats["emails_sent"] += 1
 
                 # Rate-limit pacing delay to protect Groq API free tier RPM limits
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(5.0)
             except QuotaExceededException as qe:
                 system_logger.add_log("ERROR", f"🛑 [BatchEval] API Quota Exhausted! Halting evaluation batch immediately: {qe}")
                 stats["quota_error"] = str(qe)
