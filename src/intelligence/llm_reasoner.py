@@ -1,5 +1,6 @@
 import json
 import re
+import asyncio
 import httpx
 from typing import Dict, Any, Optional
 from config import settings
@@ -106,40 +107,48 @@ class LLMOpportunityReasoner:
         if self.api_key and settings.LLM_PROVIDER != "gemini":
             try:
                 system_logger.add_log("INFO", f"[LLMReasoner] Querying Groq API model ({self.model}) with eaisystems.com & phantomops.ae grounding context...")
-                async with httpx.AsyncClient(timeout=20.0) as client:
-                    resp = await client.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json"
-                        },
-                        json={
-                            "model": self.model,
-                            "messages": [
-                                {"role": "system", "content": SYSTEM_PROMPT},
-                                {"role": "user", "content": f"Evaluate this procurement notice:\nTitle: {title}\nDetails: {raw_content}"}
-                            ],
-                            "temperature": 0.2,
-                            "max_tokens": 600,
-                            "response_format": {"type": "json_object"}
-                        }
-                    )
+                async with httpx.AsyncClient(timeout=25.0) as client:
+                    for attempt in range(3):
+                        resp = await client.post(
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {self.api_key}",
+                                "Content-Type": "application/json"
+                            },
+                            json={
+                                "model": self.model,
+                                "messages": [
+                                    {"role": "system", "content": SYSTEM_PROMPT},
+                                    {"role": "user", "content": f"Evaluate this procurement notice:\nTitle: {title}\nDetails: {raw_content}"}
+                                ],
+                                "temperature": 0.2,
+                                "max_tokens": 600,
+                                "response_format": {"type": "json_object"}
+                            }
+                        )
 
-                    if resp.status_code == 200:
-                        content = resp.json()["choices"][0]["message"]["content"]
-                        parsed = json.loads(content)
-                        return parsed
-                    elif resp.status_code == 429:
-                        system_logger.add_log("WARN", "⚠️ [LLMReasoner] Groq API Rate Limit Exceeded (HTTP 429). Attempting Gemini failover...")
-                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
-                        if gemini_res:
-                            return gemini_res
-                        raise QuotaExceededException("Both Groq & Gemini API Quotas / Rate Limits Exceeded (HTTP 429). Evaluation run halted.")
-                    else:
-                        system_logger.add_log("WARN", f"[LLMReasoner] Groq API HTTP {resp.status_code}, attempting Gemini failover...")
-                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
-                        if gemini_res:
-                            return gemini_res
+                        if resp.status_code == 200:
+                            content = resp.json()["choices"][0]["message"]["content"]
+                            parsed = json.loads(content)
+                            return parsed
+                        elif resp.status_code == 429:
+                            retry_after = float(resp.headers.get("retry-after", 3.0))
+                            if attempt < 2:
+                                system_logger.add_log("WARN", f"⚠️ [LLMReasoner] Groq API Rate Limit (HTTP 429). Throttled by Groq. Pausing {retry_after}s for auto-retry (Attempt {attempt+1}/3)...")
+                                await asyncio.sleep(retry_after)
+                                continue
+                            else:
+                                system_logger.add_log("WARN", "⚠️ [LLMReasoner] Groq API Rate Limit Exceeded after retries. Attempting Gemini failover...")
+                                gemini_res = await self.evaluate_with_gemini(title, raw_content)
+                                if gemini_res:
+                                    return gemini_res
+                                raise QuotaExceededException("Both Groq & Gemini API Quotas / Rate Limits Exceeded (HTTP 429). Evaluation run halted.")
+                        else:
+                            system_logger.add_log("WARN", f"[LLMReasoner] Groq API HTTP {resp.status_code}, attempting Gemini failover...")
+                            gemini_res = await self.evaluate_with_gemini(title, raw_content)
+                            if gemini_res:
+                                return gemini_res
+                            break
             except QuotaExceededException:
                 raise
             except Exception as e:
