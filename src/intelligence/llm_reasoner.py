@@ -1,7 +1,7 @@
 import json
 import re
 import httpx
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from config import settings
 from src.services.logger_service import system_logger
 
@@ -47,6 +47,33 @@ class LLMOpportunityReasoner:
         self.api_key = settings.GROQ_API_KEY
         self.model = settings.GROQ_MODEL
 
+    async def evaluate_with_gemini(self, title: str, raw_content: str) -> Optional[Dict[str, Any]]:
+        gemini_key = settings.GEMINI_API_KEY
+        if not gemini_key:
+            return None
+
+        gemini_model = getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash")
+        system_logger.add_log("INFO", f"[LLMReasoner] Querying Google Gemini API ({gemini_model}) with eaisystems.com & phantomops.ae grounding context...")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={gemini_key}"
+        prompt_text = f"{SYSTEM_PROMPT}\n\nEvaluate this procurement notice:\nTitle: {title}\nDetails: {raw_content}\nRespond strictly in valid JSON matching the schema."
+        payload = {
+            "contents": [{"parts": [{"text": prompt_text}]}],
+            "generationConfig": {"responseMimeType": "application/json"}
+        }
+        try:
+            async with httpx.AsyncClient(timeout=25.0) as client:
+                resp = await client.post(url, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    text_content = data["candidates"][0]["content"]["parts"][0]["text"]
+                    parsed = json.loads(text_content)
+                    return parsed
+                else:
+                    system_logger.add_log("WARN", f"[LLMReasoner] Gemini API returned HTTP {resp.status_code}: {resp.text[:150]}")
+        except Exception as e:
+            system_logger.add_log("ERROR", f"[LLMReasoner] Gemini API exception: {e}")
+        return None
+
     async def evaluate_rfp(self, rfp_data: Dict[str, Any]) -> Dict[str, Any]:
         title = rfp_data.get("title", "")
         raw_content = rfp_data.get("raw_content", "")
@@ -67,7 +94,7 @@ class LLMOpportunityReasoner:
             }
 
         # Try Groq API if key is set
-        if self.api_key:
+        if self.api_key and settings.LLM_PROVIDER != "gemini":
             try:
                 system_logger.add_log("INFO", f"[LLMReasoner] Querying Groq API model ({self.model}) with eaisystems.com & phantomops.ae grounding context...")
                 async with httpx.AsyncClient(timeout=20.0) as client:
@@ -94,31 +121,27 @@ class LLMOpportunityReasoner:
                         parsed = json.loads(content)
                         return parsed
                     elif resp.status_code == 429:
-                        system_logger.add_log("ERROR", "🛑 [LLMReasoner] Groq API Token / Rate Limit Exhausted! (HTTP 429 - Rate limit reached). Skipping heuristic false score.")
-                        return {
-                            "relevance_score": 0,
-                            "is_relevant": False,
-                            "why_relevant": "Groq LLM evaluation paused: API Token / Rate Limit Exhausted (HTTP 429).",
-                            "eai_deliverables": [],
-                            "missing_requirements": ["Requires Groq API Token quota reset"],
-                            "ai_summary": "⚠️ Evaluation incomplete: Groq API Token Limit / Quota Exhausted (HTTP 429). Please retry once quota resets.",
-                            "recommendation": "PASS"
-                        }
+                        system_logger.add_log("WARN", "⚠️ [LLMReasoner] Groq API Token / Rate Limit Exhausted (HTTP 429). Initiating failover to Google Gemini 3.6 Flash...")
+                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
+                        if gemini_res:
+                            return gemini_res
                     elif resp.status_code in [401, 403]:
-                        system_logger.add_log("ERROR", f"🛑 [LLMReasoner] Groq API Authorization Error (HTTP {resp.status_code}). Invalid or expired API key.")
-                        return {
-                            "relevance_score": 0,
-                            "is_relevant": False,
-                            "why_relevant": f"Groq API Authorization Error (HTTP {resp.status_code}). Please check GROQ_API_KEY.",
-                            "eai_deliverables": [],
-                            "missing_requirements": ["Invalid API Key"],
-                            "ai_summary": f"⚠️ Evaluation failed: Groq API Authorization Error (HTTP {resp.status_code}).",
-                            "recommendation": "PASS"
-                        }
+                        system_logger.add_log("WARN", f"⚠️ [LLMReasoner] Groq API Authorization Error (HTTP {resp.status_code}). Initiating failover to Google Gemini 3.6 Flash...")
+                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
+                        if gemini_res:
+                            return gemini_res
                     else:
-                        system_logger.add_log("WARN", f"[LLMReasoner] Groq API HTTP {resp.status_code}, falling back to deterministic heuristic evaluation.")
+                        system_logger.add_log("WARN", f"[LLMReasoner] Groq API HTTP {resp.status_code}, attempting Gemini failover...")
+                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
+                        if gemini_res:
+                            return gemini_res
             except Exception as e:
                 system_logger.add_log("ERROR", f"[LLMReasoner] Groq API error: {e}")
+
+        # Try Google Gemini if configured or as failover
+        gemini_res = await self.evaluate_with_gemini(title, raw_content)
+        if gemini_res:
+            return gemini_res
 
         # Deterministic Heuristic Fallback
         system_logger.add_log("INFO", f"[LLMReasoner] Applying eaisystems.com & phantomops.ae heuristic matcher...")

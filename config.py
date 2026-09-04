@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     SERPAPI_KEY: str = ""
     LLM_PROVIDER: str = "groq"
     GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     OPENAI_API_KEY: str = ""
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
