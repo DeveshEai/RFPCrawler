@@ -1,4 +1,4 @@
-# 🎯 RFP Intelligence & Automated Procurement System
+# RFP Intelligence & Automated Procurement System
 
 > **Enterprise AI-powered procurement intelligence engine for real-time RFP scraping, deep PDF document parsing, and grounding evaluation tuned for EAI Systems (`eaisystems.com`) and PhantomOps (`phantomops.ae`).**
 
