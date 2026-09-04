@@ -4,7 +4,7 @@ import re
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict, Any
-from src.sources.base_adapter import BasePortalAdapter
+from src.sources.base_adapter import BasePortalAdapter, fetch_deep_page_content
 from src.services.logger_service import system_logger
 
 class ContractsFinderAdapter(BasePortalAdapter):
@@ -40,15 +40,13 @@ class ContractsFinderAdapter(BasePortalAdapter):
             "Accept-Language": "en-GB,en;q=0.9"
         }
 
-        # Broadened tech keywords to maximize IT & Software procurement capture
+        # High-precision technology keywords targeted for EAI Systems & PhantomOps
         tech_keywords = [
-            "software", "artificial intelligence", " ai ", "cloud", "automation", "api",
-            "cyber", "cybersecurity", "pega", "bpm", "microservices", "digital", "data",
-            "saas", "devops", "managed it", "it service", "crm", "erp", "analytics",
-            "machine learning", "tech", "robotic process", "rpa", "integration",
-            "information technology", "ict", "infrastructure", "systems", "platform",
-            "application", "modernisation", "modernization", "security", "network",
-            "consultancy", "database", "consulting", "enterprise architecture"
+            "pega", "bpm", "dpa", "business process automation", "case management",
+            "sovereign ai", "arabic ai", "agentic ai", "llm", "artificial intelligence",
+            "microservices", "mulesoft", "api management", "integration platform",
+            "enterprise architecture", "workflow automation", "cloud migration",
+            "robotic process", "rpa", "cybersecurity", "saas platform", "core banking"
         ]
 
         # Non-IT physical & facilities terms to exclude
@@ -154,6 +152,9 @@ class ContractsFinderAdapter(BasePortalAdapter):
                     if len(results) >= max_items:
                         break
 
+                    deep_body = await fetch_deep_page_content(client, item["url"], max_chars=3000)
+                    full_content = deep_body if len(deep_body) > 200 else item["raw_text"]
+
                     results.append({
                         "external_rfp_id": f"uk_cf_{hash(item['url']) & 0xFFFFFFFF}",
                         "title": item["title"],
@@ -163,7 +164,7 @@ class ContractsFinderAdapter(BasePortalAdapter):
                         "currency": "GBP",
                         "submission_deadline": item["closing"],
                         "source_url": item["url"],
-                        "raw_content": item["raw_text"],
+                        "raw_content": f"{item['title']}. {full_content}",
                         "portal_id": self.portal_id
                     })
 
