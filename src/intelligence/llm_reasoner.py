@@ -130,21 +130,18 @@ class LLMOpportunityReasoner:
                         parsed = json.loads(content)
                         return parsed
                     elif resp.status_code == 429:
-                        system_logger.add_log("WARN", "⚠️ [LLMReasoner] Groq API Rate Limit (HTTP 429). Attempting Gemini failover...")
-                        try:
-                            gemini_res = await self.evaluate_with_gemini(title, raw_content)
-                            if gemini_res:
-                                return gemini_res
-                        except QuotaExceededException:
-                            system_logger.add_log("WARN", "[LLMReasoner] Gemini quota also exhausted. Applying EAI heuristic domain matcher.")
+                        system_logger.add_log("WARN", "⚠️ [LLMReasoner] Groq API Rate Limit Exceeded (HTTP 429). Attempting Gemini failover...")
+                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
+                        if gemini_res:
+                            return gemini_res
+                        raise QuotaExceededException("Both Groq & Gemini API Quotas / Rate Limits Exceeded (HTTP 429). Evaluation run halted.")
                     else:
                         system_logger.add_log("WARN", f"[LLMReasoner] Groq API HTTP {resp.status_code}, attempting Gemini failover...")
-                        try:
-                            gemini_res = await self.evaluate_with_gemini(title, raw_content)
-                            if gemini_res:
-                                return gemini_res
-                        except QuotaExceededException:
-                            pass
+                        gemini_res = await self.evaluate_with_gemini(title, raw_content)
+                        if gemini_res:
+                            return gemini_res
+            except QuotaExceededException:
+                raise
             except Exception as e:
                 system_logger.add_log("ERROR", f"[LLMReasoner] Groq API error: {e}")
 
