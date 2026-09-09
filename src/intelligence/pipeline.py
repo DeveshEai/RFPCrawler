@@ -198,7 +198,13 @@ class RFPIntelligencePipeline:
                             system_logger.add_log("ERROR", f"🛑 [AutoEval] Halting AI evaluation: {qe}")
                             auto_evaluate = False
 
-            system_logger.add_log("SUCCESS", f"🏁 Fast Crawl completed! Scraped: {stats['scraped']} | Saved to DB: {stats['stage1_passed']} (Click '🧠 Evaluate' to analyze with AI)")
+            if stats["stage1_passed"] > 0:
+                system_logger.add_log("SUCCESS", f"🏁 Fast Crawl completed! Scraped: {stats['scraped']} | Saved {stats['stage1_passed']} NEW opportunities to DB (Click '🧠 Evaluate' to analyze with AI)")
+            elif stats["reverified"] > 0:
+                system_logger.add_log("INFO", f"ℹ️ Scraped {stats['scraped']} opportunities — all {stats['reverified']} are already saved in your database! Government portals publish updates periodically; please wait a bit before re-crawling for new leads.")
+            else:
+                system_logger.add_log("INFO", f"ℹ️ Crawl cycle completed ({stats['scraped']} items checked). No new opportunities published right now. Please wait a short while for new portal updates.")
+
             return stats
         finally:
             _crawl_lock_active = False
