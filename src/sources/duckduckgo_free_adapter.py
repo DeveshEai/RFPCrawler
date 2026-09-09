@@ -34,12 +34,12 @@ class DuckDuckGoFreeAdapter(BasePortalAdapter):
         system_logger.add_log("INFO", "[DuckDuckGoFreeAdapter] Initiating 100% Free DuckDuckGo search dork crawl...")
 
         queries = [
-            'intitle:"Contract Notice" "Pega" OR "BPM" site:service.gov.uk',
-            'intitle:"Tender" "Sovereign AI" OR "Arabic AI" OR "Agentic" site:gov.ae',
-            'intitle:"Solicitation" "Microservices" OR "Integration Platform" site:sam.gov',
-            '"Request for Proposal" "Case Management" OR "Process Automation" site:gov.uk',
-            'intitle:"RFP" "MuleSoft" OR "API Gateway" site:service.gov.uk',
-            'intitle:"Tender Notice" "Workflow Automation" site:gov.uk'
+            'intitle:"Contract Notice" "Pega" OR "BPM" site:service.gov.uk -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            'intitle:"Tender" "Sovereign AI" OR "Arabic AI" OR "Agentic" site:gov.ae -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            'intitle:"Solicitation" "Microservices" OR "Integration Platform" site:sam.gov -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            '"Request for Proposal" "Case Management" OR "Process Automation" site:gov.uk -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            'intitle:"RFP" "MuleSoft" OR "API Gateway" site:service.gov.uk -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            'intitle:"Tender Notice" "Workflow Automation" site:gov.uk -2020 -2021 -2022 -2023 -2024 -2025 +2026'
         ]
 
         selected_queries = random.sample(queries, min(3, len(queries)))

@@ -1,5 +1,6 @@
 # Environment & Secrets
 .env
+Chats.md
 
 # SQLite Database
 *.db
@@ -26,5 +27,7 @@ Thumbs.db
 # Logs
 *.log
 
-# Documentation
+# Archive & Docs
+archive/
+Chats.md
 RFPCrawler_v2_Documentation.docx

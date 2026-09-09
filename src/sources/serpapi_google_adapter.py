@@ -41,12 +41,12 @@ class SerpApiGoogleAdapter(BasePortalAdapter):
 
         # Strict dork queries targeting real contract notices and excluding blog/article noise
         queries = [
-            'intitle:"Contract Notice" "Pega" OR "BPM" site:service.gov.uk -"blog" -"tools"',
-            'intitle:"Tender" "Sovereign AI" OR "Arabic AI" OR "Agentic" site:gov.ae -"blog"',
-            'intitle:"Solicitation" "Microservices" OR "Integration Platform" site:sam.gov -"blog"',
-            '"Request for Proposal" "Case Management" site:gov.uk -"blog" -"what is"',
-            'intitle:"RFP" "MuleSoft" OR "API Gateway" site:service.gov.uk -"blog"',
-            'intitle:"Tender Notice" "Workflow Automation" site:gov.uk -"blog" -"best"'
+            'intitle:"Contract Notice" "Pega" OR "BPM" site:service.gov.uk -"blog" -"tools" -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            'intitle:"Tender" "Sovereign AI" OR "Arabic AI" OR "Agentic" site:gov.ae -"blog" -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            'intitle:"Solicitation" "Microservices" OR "Integration Platform" site:sam.gov -"blog" -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            '"Request for Proposal" "Case Management" site:gov.uk -"blog" -"what is" -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            'intitle:"RFP" "MuleSoft" OR "API Gateway" site:service.gov.uk -"blog" -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+            'intitle:"Tender Notice" "Workflow Automation" site:gov.uk -"blog" -"best" -2020 -2021 -2022 -2023 -2024 -2025 +2026'
         ]
 
         selected_queries = random.sample(queries, min(3, len(queries)))

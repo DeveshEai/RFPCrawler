@@ -36,9 +36,9 @@ class GlobalTechTendersAdapter(BasePortalAdapter):
         if settings.SERPAPI_KEY and settings.SERPAPI_KEY != "your_serpapi_key_here":
             try:
                 queries = [
-                    'site:sam.gov/opp "Artificial Intelligence" OR "Agentic AI" OR "Software"',
-                    'site:sam.gov/opp "Pega" OR "Process Automation" OR "Workflow"',
-                    'site:sam.gov/opp "Digital Transformation" OR "Cloud Migration"'
+                    'site:sam.gov/opp "Artificial Intelligence" OR "Agentic AI" OR "Software" -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+                    'site:sam.gov/opp "Pega" OR "Process Automation" OR "Workflow" -2020 -2021 -2022 -2023 -2024 -2025 +2026',
+                    'site:sam.gov/opp "Digital Transformation" OR "Cloud Migration" -2020 -2021 -2022 -2023 -2024 -2025 +2026'
                 ]
                 
                 async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:

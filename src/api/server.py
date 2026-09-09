@@ -242,6 +242,9 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 <a href="{r.source_url}" target="_blank" class="btn-ext-link" title="Open Original Notice Page">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                 </a>
+                <button onclick="deleteRfp('{r.id}', event)" class="btn-ext-link" title="Delete Opportunity" style="border-color: #fca5a5; color: #dc2626; background: #fff1f2; cursor: pointer;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
             </div>
         </div>
         """
@@ -287,9 +290,14 @@ def admin_dashboard(db: Session = Depends(get_db)):
 
                 <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 14px;">
                     <a href="{r.source_url}" target="_blank" style="color: #0284c7; text-decoration: none; font-weight: 600; font-size: 0.85rem;">View Original RFP Notice ↗</a>
-                    <button id="eval-btn-{r.id}" onclick="reEvaluateRfp('{r.id}')" style="background: #0f172a; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">
-                        ⚡ Re-Evaluate with AI
-                    </button>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="deleteRfp('{r.id}', event)" style="background: #fff1f2; color: #dc2626; border: 1px solid #fecdd3; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            🗑️ Delete
+                        </button>
+                        <button id="eval-btn-{r.id}" onclick="reEvaluateRfp('{r.id}')" style="background: #0f172a; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">
+                            ⚡ Re-Evaluate with AI
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Dedicated In-Card Live Evaluation Output Log -->
@@ -757,7 +765,11 @@ def admin_dashboard(db: Session = Depends(get_db)):
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             Evaluate Pending RFPs ({count_pending} Pending)
                         </button>
-                        <button class="btn-trigger" style="background: #ef4444;" onclick="cancelActiveCrawl()">
+                        <button class="btn-trigger" style="background: #dc2626;" onclick="clearAllRFPs()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Clear All RFPs
+                        </button>
+                        <button class="btn-trigger" style="background: #64748b;" onclick="cancelActiveCrawl()">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
                             Stop / Cancel
                         </button>
@@ -1458,6 +1470,43 @@ def admin_dashboard(db: Session = Depends(get_db)):
                     alert('Evaluation error: ' + e);
                 }}
             }}
+
+            async function deleteRfp(rfpId, ev) {{
+                if (ev && ev.preventDefault) ev.preventDefault();
+                if (!confirm('Are you sure you want to delete this RFP opportunity?')) return;
+                appendConsoleLog('WARN', '🗑️ Deleting RFP opportunity #' + rfpId + '...');
+                try {{
+                    const res = await fetch('/api/v1/opportunities/' + encodeURIComponent(rfpId), {{ method: 'DELETE' }});
+                    const data = await res.json();
+                    if (data.status === 'success') {{
+                        appendConsoleLog('SUCCESS', 'Deleted RFP #' + rfpId);
+                        window.location.reload();
+                    }} else {{
+                        alert('Error deleting RFP: ' + (data.detail || data.message));
+                    }}
+                }} catch (e) {{
+                    appendConsoleLog('ERROR', 'Delete error: ' + e);
+                    alert('Delete error: ' + e);
+                }}
+            }}
+
+            async function clearAllRFPs() {{
+                if (!confirm('⚠️ Are you sure you want to CLEAR ALL RFPs and AI evaluations from the database? This cannot be undone.')) return;
+                appendConsoleLog('WARN', '🗑️ Clearing all RFPs and AI evaluations from database...');
+                try {{
+                    const res = await fetch('/api/v1/opportunities/clear-all', {{ method: 'DELETE' }});
+                    const data = await res.json();
+                    if (data.status === 'success') {{
+                        appendConsoleLog('SUCCESS', 'All RFPs cleared! Ready for fresh crawl run.');
+                        window.location.reload();
+                    }} else {{
+                        alert('Error clearing RFPs: ' + (data.detail || data.message));
+                    }}
+                }} catch (e) {{
+                    appendConsoleLog('ERROR', 'Clear all error: ' + e);
+                    alert('Clear error: ' + e);
+                }}
+            }}
         </script>
     </body>
     </html>
@@ -1582,3 +1631,23 @@ async def re_evaluate_rfp(rfp_id: str, db: Session = Depends(get_db)):
         "eai_deliverables": eval_res.get("eai_deliverables", []),
         "missing_requirements": eval_res.get("missing_requirements", [])
     }
+
+@app.delete("/api/v1/opportunities/clear-all")
+def clear_all_opportunities(db: Session = Depends(get_db)):
+    e_count = db.query(RFPExecutionEvaluation).delete()
+    r_count = db.query(RFPOpportunity).delete()
+    db.commit()
+    system_logger.add_log("WARN", f"🗑️ Cleared database: {r_count} opportunities and {e_count} evaluations removed. Ready for new crawl!")
+    return {"status": "success", "message": f"Cleared {r_count} opportunities and {e_count} evaluations"}
+
+@app.delete("/api/v1/opportunities/{rfp_id}")
+def delete_single_opportunity(rfp_id: str, db: Session = Depends(get_db)):
+    rfp = db.query(RFPOpportunity).filter_by(id=rfp_id).first()
+    if not rfp:
+        raise HTTPException(status_code=404, detail="RFP opportunity not found")
+    db.query(RFPExecutionEvaluation).filter_by(rfp_id=rfp.id).delete()
+    db.delete(rfp)
+    db.commit()
+    system_logger.add_log("INFO", f"🗑️ Deleted RFP opportunity '{rfp.title[:40]}' (ID: {rfp_id})")
+    return {"status": "success", "message": "Opportunity deleted", "id": rfp_id}
+
