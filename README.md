@@ -1,13 +1,13 @@
 # RFP Intelligence & Automated Procurement System
 
-> **Enterprise AI-powered procurement intelligence engine for real-time RFP scraping, deep PDF document parsing, and grounding evaluation tuned for EAI Systems (`eaisystems.com`) and PhantomOps (`phantomops.ae`).**
+> **Enterprise AI-powered procurement intelligence engine for real-time RFP scraping, stateful LangGraph multi-agent reasoning, deep PDF document parsing, and grounding evaluation tuned for EAI Systems (`eaisystems.com`) and PhantomOps (`phantomops.ae`).**
 
 ---
 
 ## 🖼️ Dashboard Overview & Interface Tour
 
 ### 1. Opportunity Feed & Real-Time Pipeline Stream
-The main dashboard presents live procurement opportunities scraped across global portals, featuring real-time LLM reasoning event stream logs, PURSUE/REVIEW match tags, and fast scraping controls.
+The main dashboard presents live procurement opportunities scraped across global portals and official JSON feeds, featuring real-time LLM reasoning event stream logs, PURSUE/REVIEW match tags, and fast scraping controls.
 
 ![Opportunity Feed](docs/images/opportunity_feed_v4.png)
 
@@ -28,7 +28,7 @@ Grounding domain knowledge store indexed for **EAI Systems** (`eaisystems.com`) 
 ---
 
 ### 4. Configured Portal Adapters
-Multi-portal scraping control panel supporting UK Contracts Finder, Find a Tender, SAM.gov, Google Serper, SerpApi, DuckDuckGo, and Craxy AI.
+Multi-portal scraping control panel supporting UK Contracts Finder OCDS API, EU TED Search API, Find a Tender, SAM.gov, SerpApi, DuckDuckGo, and Craxy AI.
 
 ![Portal Adapters](docs/images/portal_adapters_v4.png)
 
@@ -43,25 +43,27 @@ Dedicated analysis workspace with score filters (`PURSUE Only`, `Match Score >= 
 
 ## ⚡ Key Features
 
-- **🌐 Multi-Portal Live Procurement Crawling**:
-  - **UK Contracts Finder** — Live web scraper with GBP budget extraction & deadline tracking.
+- **🌐 Multi-Portal & Keyless JSON API Ingestion**:
+  - **UK Contracts Finder OCDS API (`UKContractsAPIAdapter`)** — Direct OCDS search endpoint ingestion filtered for IT Services (`72000000`) and Software Packages (`48000000`).
+  - **EU TED Search API (`EUTEDAPIAdapter`)** — Keyless EU Tenders Electronic Daily API with dynamic 24-48h publication date range filtering (`PD=[{yesterday} TO {today}]`) and graceful HTTP 202 Async/Accepted handling.
   - **Find a Tender (UK)** — Enterprise-level UK high-value public procurement notices.
-  - **SAM.gov (US Federal Solicitations)** — Dynamic search dorking for US government solicitations.
+  - **SAM.gov (US Federal Solicitations)** — Federal solicitation dorking and dynamic parsing.
   - **Craxy AI & DuckDuckGo** — Multi-portal fallback scrapers for international tenders.
+- **🤖 Stateful LangGraph Multi-Agent Architecture**:
+  - **Domain Router Agent**: Classifies tender scope, returning explicit rejection for supplier profiles, DPS directories, expired notices, or non-IT construction.
+  - **Expert Evaluator Agent**: Evaluates capability alignment against Pega BPM, EAI Integration, and Sovereign Arabic AI workforces.
+  - **Brief Synthesizer Agent**: Generates structured 12-question executive briefing dossiers.
+- **🧹 Pre-Routing Deduplication & Noise Suppression**:
+  - Automatically checks SQLite database (`external_rfp_id`, `source_url`, `title+org`) and silently drops pre-existing records to keep console logs clean.
+  - Pre-filtered IT CPV JSON API sources bypass Stage 1 keyword filters cleanly.
+- **🔒 Concurrency Protection & Rate Limit Safety**:
+  - Built-in `_crawl_lock_active` concurrency guard to prevent duplicate overlapping crawl triggers.
 - **📄 Deep PDF Attachment Extraction**:
   - Automatically detects, downloads, and parses attached PDF specification documents using `pypdf`.
   - Injects visual **`📄 PDF`** badges onto dashboard cards with direct specification download links.
-- **🧠 Dual AI Evaluation Engine**:
+- **🧠 Dual AI Reasoning Engine**:
   - **Primary**: Groq API (`qwen/qwen3.8-27b`).
   - **Secondary**: Google Gemini API (`gemini-3.6-flash`).
-  - Grounded evaluations against Pega BPM, Enterprise Integration, and Sovereign Agentic AI capabilities.
-- **🛑 Quota Exhaustion Circuit Breaker**:
-  - Catches HTTP `429 Rate Limit / Quota Exhausted` errors and **immediately halts** batch evaluations to preserve resources.
-  - Built-in rate-limit pacing delay (`1.2s`) to prevent API rate-limit spikes.
-- **🔄 Live Domain Knowledge Re-Sync**:
-  - Live HTTPS probes and vector grounding refresh for `eaisystems.com` and `phantomops.ae`.
-- **📊 Interactive Management Dashboard**:
-  - Live streaming log console, RFP filtering (PURSUE / REVIEW / PASS), detailed 12-question executive AI briefs, and 1-click batch evaluation.
 
 ---
 
@@ -70,8 +72,9 @@ Dedicated analysis workspace with score filters (`PURSUE Only`, `Match Score >= 
 | Component | Technology |
 |---|---|
 | **Backend Framework** | FastAPI (Python 3.10+) |
+| **Agent Orchestration** | LangGraph & LangChain State Graph |
 | **Database ORM** | SQLAlchemy with SQLite (`rfp_intelligence.db`) |
-| **Web Crawling** | `httpx`, `BeautifulSoup4`, SerpApi |
+| **JSON APIs & Crawling** | `httpx` AsyncClient, BeautifulSoup4, OCDS API, EU TED API |
 | **PDF Extraction** | `pypdf` (In-memory text extraction) |
 | **AI LLM Engines** | Groq API (`qwen/qwen3.8-27b`), Google Gemini 3.6 Flash |
 | **Alerts & Logging** | SMTP Email Alerts, In-Memory System Event Logger |
@@ -87,8 +90,10 @@ git clone https://github.com/DeveshEAI/RFPCrawler.git
 cd RFPCrawler
 ```
 
-### 2. Install Dependencies
+### 2. Set Up Virtual Environment & Dependencies
 ```bash
+python -m venv venv
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
@@ -126,25 +131,6 @@ Open your browser and navigate to: **`http://localhost:8000`**
 
 ---
 
-## 🔄 How to Switch AI Providers (Groq ↔ Gemini)
-
-You can toggle between Groq and Gemini anytime by changing `LLM_PROVIDER` in `.env`:
-
-* **To Use Groq (Fast & Free of Gemini Quotas)**:
-  ```ini
-  LLM_PROVIDER="groq"
-  ```
-* **To Switch to Gemini**:
-  ```ini
-  LLM_PROVIDER="gemini"
-  ```
-* **Restart Server**:
-  ```bash
-  python main.py
-  ```
-
----
-
 ## 📁 Repository Architecture
 
 ```
@@ -162,14 +148,19 @@ RFPCrawler/
 │   │   ├── database.py              # SQLite session & engine setup
 │   │   └── models.py                # Database models (RFPOpportunity, RFPExecutionEvaluation)
 │   ├── intelligence/
-│   │   ├── llm_reasoner.py          # Groq & Gemini reasoning logic + Quota Guards
+│   │   ├── graph_state.py           # LangGraph RFPState TypedDict schema
+│   │   ├── agents.py                # Specialized Agent Nodes (Router, Evaluator, Synthesizer)
+│   │   ├── llm_reasoner.py          # LLMOpportunityReasoner & LangGraph App
 │   │   ├── pipeline.py              # Crawl, Stage 1 Filter, and Batch AI Evaluation pipeline
 │   │   └── stage1_filter.py         # Deterministic anti-noise filter
 │   ├── services/
 │   │   ├── logger_service.py        # System event logger
 │   │   └── email_service.py         # Email notification alerts
 │   └── sources/
-│       ├── base_adapter.py          # Base adapter & PDF extraction utilities
+│       ├── base_adapter.py          # Base portal adapter & PDF extraction utilities
+│       ├── base_json_adapter.py     # Base JSON API adapter (httpx AsyncClient)
+│       ├── uk_contracts_api_adapter.py # UK Contracts Finder OCDS Search API adapter
+│       ├── eu_ted_api_adapter.py    # EU TED Search API adapter (Dynamic 24-48h date query)
 │       ├── contracts_finder_adapter.py  # UK Contracts Finder scraper
 │       ├── find_a_tender_adapter.py     # UK Find a Tender scraper
 │       ├── global_tech_tenders_adapter.py # SAM.gov SerpApi dorking scraper
@@ -191,3 +182,4 @@ RFPCrawler/
 ## 📜 License
 
 Distributed under the **MIT License**. Built for **EAI Systems** & **PhantomOps**.
+
