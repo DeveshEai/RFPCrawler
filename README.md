@@ -28,7 +28,7 @@ Grounding domain knowledge store indexed for **EAI Systems** (`eaisystems.com`) 
 ---
 
 ### 4. Configured Portal Adapters
-Multi-portal scraping control panel supporting UK Contracts Finder OCDS API, EU TED Search API, Find a Tender, SAM.gov, SerpApi, DuckDuckGo, and Craxy AI.
+Multi-portal scraping control panel supporting UK Contracts Finder OCDS API, EU TED Search API, World Bank Global Procurement API, UNGM United Nations Marketplace, Find a Tender, SAM.gov, SerpApi, DuckDuckGo, and Craxy AI.
 
 ![Portal Adapters](docs/images/portal_adapters_v4.png)
 
@@ -46,6 +46,8 @@ Dedicated analysis workspace with score filters (`PURSUE Only`, `Match Score >= 
 - **🌐 Multi-Portal & Keyless JSON API Ingestion**:
   - **UK Contracts Finder OCDS API (`UKContractsAPIAdapter`)** — Direct OCDS search endpoint ingestion filtered for IT Services (`72000000`) and Software Packages (`48000000`).
   - **EU TED Search API (`EUTEDAPIAdapter`)** — Keyless EU Tenders Electronic Daily API with dynamic 24-48h publication date range filtering (`PD=[{yesterday} TO {today}]`) and graceful HTTP 202 Async/Accepted handling.
+  - **World Bank Global Procurement API (`WorldBankAPIAdapter`)** — Official World Bank multilateral digital transformation and enterprise software tender feed.
+  - **UNGM United Nations Marketplace (`UNGMAdapter`)** — Active UN agencies tech procurement notices (UNDP, UNICEF, UNOPS, WHO).
   - **Find a Tender (UK)** — Enterprise-level UK high-value public procurement notices.
   - **SAM.gov (US Federal Solicitations)** — Federal solicitation dorking and dynamic parsing.
   - **Craxy AI & DuckDuckGo** — Multi-portal fallback scrapers for international tenders.
@@ -161,6 +163,8 @@ RFPCrawler/
 │       ├── base_json_adapter.py     # Base JSON API adapter (httpx AsyncClient)
 │       ├── uk_contracts_api_adapter.py # UK Contracts Finder OCDS Search API adapter
 │       ├── eu_ted_api_adapter.py    # EU TED Search API adapter (Dynamic 24-48h date query)
+│       ├── world_bank_api_adapter.py # World Bank Global Procurement API adapter
+│       ├── ungm_adapter.py          # UNGM United Nations Marketplace adapter
 │       ├── contracts_finder_adapter.py  # UK Contracts Finder scraper
 │       ├── find_a_tender_adapter.py     # UK Find a Tender scraper
 │       ├── global_tech_tenders_adapter.py # SAM.gov SerpApi dorking scraper

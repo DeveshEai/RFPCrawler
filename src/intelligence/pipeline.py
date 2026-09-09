@@ -10,6 +10,8 @@ from src.sources.duckduckgo_free_adapter import DuckDuckGoFreeAdapter
 from src.sources.craxy_ai_adapter import CraxyAIAdapter
 from src.sources.uk_contracts_api_adapter import UKContractsAPIAdapter
 from src.sources.eu_ted_api_adapter import EUTEDAPIAdapter
+from src.sources.world_bank_api_adapter import WorldBankAPIAdapter
+from src.sources.ungm_adapter import UNGMAdapter
 from src.intelligence.stage1_filter import Stage1DeterministicFilter
 from src.intelligence.graph_state import RFPState
 from src.intelligence.llm_reasoner import LLMOpportunityReasoner, QuotaExceededException, rfp_langgraph_app
@@ -42,6 +44,8 @@ class RFPIntelligencePipeline:
         self.adapters = [
             UKContractsAPIAdapter(),
             EUTEDAPIAdapter(),
+            WorldBankAPIAdapter(),
+            UNGMAdapter(),
             ContractsFinderAdapter(),
             FindATenderAdapter(),
             GlobalTechTendersAdapter(),
@@ -132,8 +136,8 @@ class RFPIntelligencePipeline:
                         # Silently dropped from queue to keep console and logs clean
                         continue
 
-                    # Stage 1: Deterministic hard filter (Bypassed for pre-filtered IT CPV JSON API sources)
-                    is_clean_json = rfp_data.get("is_clean_json_api", False) or adapter.portal_id in ["uk_contracts_api", "eu_ted_api"]
+                    # Stage 1: Deterministic hard filter (Bypassed for pre-filtered IT CPV & Multilateral JSON API sources)
+                    is_clean_json = rfp_data.get("is_clean_json_api", False) or adapter.portal_id in ["uk_contracts_api", "eu_ted_api", "world_bank_api", "ungm_api"]
                     if not is_clean_json:
                         passed_stage1, reason = self.stage1_filter.evaluate(rfp_data)
                         if not passed_stage1:
