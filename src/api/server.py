@@ -765,14 +765,6 @@ def admin_dashboard(db: Session = Depends(get_db)):
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             Evaluate Pending RFPs ({count_pending} Pending)
                         </button>
-                        <button class="btn-trigger" style="background: #dc2626;" onclick="clearAllRFPs()">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            Clear All RFPs
-                        </button>
-                        <button class="btn-trigger" style="background: #64748b;" onclick="cancelActiveCrawl()">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-                            Stop / Cancel
-                        </button>
                     </div>
                 </div>
 
