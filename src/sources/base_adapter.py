@@ -110,14 +110,47 @@ async def fetch_deep_page_content(client: httpx.AsyncClient, url: str, max_chars
             if pdf_url:
                 pdf_extra_text = await extract_pdf_text_from_url(client, pdf_url, max_chars=2000)
 
-            for tag in soup(["script", "style", "header", "footer", "nav", "svg", "noscript"]):
-                tag.decompose()
-            main_content = soup.find("main") or soup.find("div", class_=re.compile(r"content|notice|detail|description|summary|body", re.I)) or soup.body
+            # Decompose site navigation, headers, footers, system alerts, and banners
+            boilerplate_selectors = [
+                "script", "style", "header", "footer", "nav", "aside", "svg", "noscript", "iframe",
+                ".usa-banner", ".sds-navbar", ".sds-header", ".sds-footer", ".system-alerts",
+                ".usa-alert", "#sds-header", "#sds-footer", ".modal-container", "#header", "#footer"
+            ]
+            for selector in boilerplate_selectors:
+                for element in soup.select(selector):
+                    element.decompose()
+
+            # Target specific opportunity detail containers or main body
+            main_content = (
+                soup.find(id=re.compile(r"description|opportunity|notice-detail", re.I)) or
+                soup.find("div", class_=re.compile(r"opportunity-detail|description-details|notice-content|usa-prose", re.I)) or
+                soup.find("main") or
+                soup.find("div", class_=re.compile(r"content|notice|detail|description|summary|body", re.I)) or
+                soup.body
+            )
+
             if main_content:
                 text = main_content.get_text(" ", strip=True)
                 clean_text = re.sub(r'\s+', ' ', text).strip()
+
+                # Detect SPA warning banners and system alert shell text
+                spa_boilerplate_phrases = [
+                    "this is a u.s. general services administration",
+                    "official website of the united states government",
+                    "entity management extract publishing schedule change",
+                    "isr workspace",
+                    "for official use only",
+                    "controlled unclassified information",
+                    "skip to main content",
+                    "federal service desk",
+                    "system alerts"
+                ]
+                lower_text = clean_text.lower()
+                if any(phrase in lower_text for phrase in spa_boilerplate_phrases) or len(clean_text) < 80:
+                    clean_text = ""
+
                 combined_text = f"{clean_text} {pdf_extra_text}".strip()
-                if len(combined_text) > 150:
+                if len(combined_text) > 80:
                     return (combined_text[:max_chars], pdf_url)
     except Exception:
         pass

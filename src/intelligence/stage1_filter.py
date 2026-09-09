@@ -16,6 +16,26 @@ EXCLUDED_KEYWORDS = [
     "video wall", "display screen"
 ]
 
+# Site-level noise phrases & federal system alert banners
+PORTAL_BOILERPLATE_BLACKLIST = [
+    "this is a u.s. general services administration",
+    "for official use only",
+    "controlled unclassified information",
+    "entity management extract",
+    "isr workspace",
+    "skip to main content",
+    "federal service desk",
+    "system alerts",
+    "official u.s. government website",
+    "official website of the department of homeland security"
+]
+
+ESSENTIAL_PROCUREMENT_MARKERS = [
+    "solicitation", "statement of work", "scope of work", "rfp", "rfi", "notice id",
+    "contract opportunity", "pega", "bpm", "ai", "cloud", "migration", "microservices",
+    "integration", "dpa", "software", "agentic", "sovereign", "cyber", "security"
+]
+
 EXPIRED_YEARS = ["2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"]
 
 class Stage1DeterministicFilter:
@@ -25,6 +45,16 @@ class Stage1DeterministicFilter:
         raw_content = rfp_data.get("raw_content", "")
         submission_deadline = rfp_data.get("submission_deadline", "")
         combined_text = f"{title} {raw_content} {submission_deadline}".lower()
+
+        # 0. Portal Boilerplate & System Alert Blacklist Check
+        for noise in PORTAL_BOILERPLATE_BLACKLIST:
+            if noise in combined_text:
+                return False, f"Matched portal boilerplate/system alert phrase: '{noise}'"
+
+        # 0b. Substance Validation Check
+        words = combined_text.split()
+        if len(words) < 25 and not any(marker in combined_text for marker in ESSENTIAL_PROCUREMENT_MARKERS):
+            return False, "Lacks essential procurement markers and sufficient content length"
 
         # 1. Hardcoded Past Year Rejection Check near Date Keywords
         # e.g., "Updated Response Date: Sep 30, 2021", "Deadline: 2023-11-04", "Closes: Oct 15, 2022"
@@ -53,7 +83,7 @@ class Stage1DeterministicFilter:
         if submission_deadline:
             try:
                 deadline_dt = datetime.strptime(str(submission_deadline)[:10], "%Y-%m-%d")
-                if deadline_dt < datetime.utcnow():
+                if deadline_dt < datetime.now():
                     return False, f"Expired deadline: {submission_deadline}"
             except Exception:
                 pass

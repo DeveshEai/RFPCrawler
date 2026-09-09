@@ -757,7 +757,7 @@ def admin_dashboard(db: Session = Depends(get_db)):
                 <div class="top-bar">
                     <h1 class="page-title">Opportunity Feed</h1>
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn-trigger" onclick="triggerLiveScan(null)">
+                        <button type="button" id="btnRunCrawlers" class="btn-trigger" onclick="triggerLiveScan(null, event)">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
                             Run Crawlers (Fast Scrape)
                         </button>

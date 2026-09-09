@@ -145,12 +145,40 @@ async def route_domain(state: RFPState) -> RFPState:
                 state["ai_summary"] = f"Notice '{title[:60]}' rejected (expired contract from {past_year})."
                 return state
 
+    # 1c. Deterministic Portal Boilerplate / System Alert Rejection Check
+    portal_boilerplate_phrases = [
+        "this is a u.s. general services administration",
+        "official website of the united states government",
+        "entity management extract publishing schedule change",
+        "isr workspace",
+        "for official use only",
+        "controlled unclassified information",
+        "skip to main content",
+        "federal service desk",
+        "system alerts"
+    ]
+    for noise in portal_boilerplate_phrases:
+        if noise in combined:
+            system_logger.add_log("WARN", f"[Agent:Router] Portal Boilerplate Rejection ('{noise}') for '{title[:40]}'")
+            state["domain_route"] = "reject"
+            state["rejection_reason"] = f"Portal boilerplate/system notice matching '{noise}'."
+            state["tech_score"] = 0
+            state["recommendation"] = "PASS"
+            state["is_relevant"] = False
+            state["compliance_flags"] = [f"REJECTED: Portal Boilerplate ('{noise}')"]
+            state["eai_deliverables"] = []
+            state["missing_requirements"] = ["Notice is portal boilerplate or site maintenance alert"]
+            state["ai_summary"] = f"Notice '{title[:60]}' rejected (classified as portal boilerplate/system notice)."
+            return state
+
     # 2. LLM Router Prompt
     system_prompt = """You are an AI Procurement Classifier.
-CRITICAL RULE: The current year is 2026. You MUST scan the text for 'Response Date', 'Deadline', 'Updated Response Date', or 'Closing Date'. If the deadline is in the years 2020, 2021, 2022, 2023, 2024, or 2025, you must INSTANTLY classify the route as 'reject' with the reason 'Expired contract'. Do not evaluate technical fit if the contract is expired.
+CRITICAL TEMPORAL & BOILERPLATE RULES:
+1. The current year is 2026. You MUST scan the text for 'Response Date', 'Deadline', 'Updated Response Date', or 'Closing Date'. If the deadline is in the years 2020, 2021, 2022, 2023, 2024, or 2025, you must INSTANTLY classify the route as 'reject' with reason 'Expired contract'. Do not evaluate technical fit if the contract is expired.
+2. CRITICAL: Reject any input that consists of website navigation headers, system alerts, portal warning banners, or site maintenance notices (e.g., SAM.gov or GSA alerts). Classify these strictly as 'reject' with reason 'Portal boilerplate/system notice'.
 
 Analyze the procurement notice and classify it strictly into ONE of the following 3 domain routes:
-1. "reject": If the notice is an expired contract (past year 2020-2025), a supplier profile, DPS directory, vendor registration form, or non-IT hardware/civil work.
+1. "reject": If the notice is an expired contract (past year 2020-2025), website navigation header/system alert/portal warning banner, supplier profile, DPS directory, vendor registration form, or non-IT hardware/civil work.
 2. "phantomops": If the notice focuses on Sovereign AI, Agentic Workforces, Arabic NLP, BFSI AI compliance, or AI autonomous agents.
 3. "eaisystems": If the notice focuses on Pega BPM, Low-Code DPA, Enterprise Integration, Microservices, Cloud Migration, or Core IT Systems.
 
